@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { SESSION_COOKIE } from "@/lib/auth/constants";
+import { absoluteAppUrl } from "@/lib/auth/request-origin";
 import { ROUTES } from "@/lib/auth/routes";
 
 const PUBLIC_PATHS = new Set([ROUTES.login, "/"]);
@@ -32,27 +33,27 @@ export function middleware(request: NextRequest) {
 
   if (pathname === ROUTES.login && hasSession) {
     return withPathname(
-      NextResponse.redirect(new URL(ROUTES.dashboard, request.url)),
+      NextResponse.redirect(absoluteAppUrl(request, ROUTES.dashboard)),
       pathname,
     );
   }
 
   if (isProtectedPath(pathname) && !hasSession) {
-    const loginUrl = new URL(ROUTES.login, request.url);
+    const loginUrl = absoluteAppUrl(request, ROUTES.login);
     loginUrl.searchParams.set("next", pathname);
     return withPathname(NextResponse.redirect(loginUrl), pathname);
   }
 
   if (pathname === "/" && hasSession) {
     return withPathname(
-      NextResponse.redirect(new URL(ROUTES.dashboard, request.url)),
+      NextResponse.redirect(absoluteAppUrl(request, ROUTES.dashboard)),
       pathname,
     );
   }
 
   if (pathname === "/" && !hasSession) {
     return withPathname(
-      NextResponse.redirect(new URL(ROUTES.login, request.url)),
+      NextResponse.redirect(absoluteAppUrl(request, ROUTES.login)),
       pathname,
     );
   }
