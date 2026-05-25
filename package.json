@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev -p 5666",
     "build": "next build",
-    "start": "next start -p 5666",
+    "start": "next start -p 5666 -H 0.0.0.0",
     "lint": "eslint",
     "verify": "node scripts/verify-role-pages.mjs && node scripts/verify-log-chat-save.mjs && node scripts/verify-db-failover.mjs",
     "sync:standby": "node scripts/sync-cloud-to-standby.mjs"

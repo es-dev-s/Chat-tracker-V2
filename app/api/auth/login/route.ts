@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { loginSchema } from "@/lib/auth/schemas";
+import { buildSessionCookieOptions } from "@/lib/auth/session-cookie";
 import { signSessionToken } from "@/lib/auth/token";
 import { SESSION_COOKIE, SESSION_KEY } from "@/lib/auth/constants";
 import { normEmail, readUserByEmail, stripPassword } from "@/lib/db/users";
@@ -35,13 +36,7 @@ export async function POST(request: Request) {
     const safeUser = stripPassword(user);
 
     const response = NextResponse.json({ token: sessionToken, user: safeUser });
-    response.cookies.set(SESSION_COOKIE, sessionToken, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
-    });
+    response.cookies.set(SESSION_COOKIE, sessionToken, buildSessionCookieOptions(request));
 
     // Mirror legacy localStorage shape for client-side compatibility
     response.headers.set(
