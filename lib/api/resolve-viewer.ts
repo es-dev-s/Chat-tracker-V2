@@ -3,7 +3,7 @@ import {
   getTokenFromCookies,
   resolveViewerFromToken,
 } from "@/lib/auth/session-server";
-import { invalidateServerCachePrefix } from "@/lib/workspace/server-cache";
+import { clearWorkspaceServerCache } from "@/lib/workspace/server-cache";
 
 export async function resolveApiViewer(request: Request) {
   const cookieToken = await getTokenFromCookies();
@@ -11,7 +11,7 @@ export async function resolveApiViewer(request: Request) {
   return resolveViewerFromToken(headerToken || cookieToken);
 }
 
-export function bustWorkspaceCache(viewerId: string | number): void {
-  invalidateServerCachePrefix(`ws:${String(viewerId)}:`);
-  invalidateServerCachePrefix("ws:shared:");
+export function bustWorkspaceCache(_viewerId?: string | number): void {
+  void _viewerId;
+  clearWorkspaceServerCache();
 }

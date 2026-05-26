@@ -63,12 +63,17 @@ function buildUsers(
   }));
 }
 
+type LoadWorkspaceOptions = { fresh?: boolean };
+
 export async function loadWorkspaceVersion(
   viewer: SessionUser,
+  options?: LoadWorkspaceOptions,
 ): Promise<WorkspaceVersionPayload> {
   const cacheKey = workspaceCacheKey(viewer.id, "version");
-  const cached = readServerCache<WorkspaceVersionPayload>(cacheKey);
-  if (cached) return cached;
+  if (!options?.fresh) {
+    const cached = readServerCache<WorkspaceVersionPayload>(cacheKey);
+    if (cached) return cached;
+  }
 
   const vk = notifUserKey(viewer);
   const [meta, catalogs, dismissedIds] = await Promise.all([
@@ -94,16 +99,19 @@ export async function loadWorkspaceVersion(
     notifUserKey: vk,
   };
 
-  writeServerCache(cacheKey, payload, 3_000);
+  writeServerCache(cacheKey, payload, 1_500);
   return payload;
 }
 
 export async function loadWorkspaceData(
   viewer: SessionUser,
+  options?: LoadWorkspaceOptions,
 ): Promise<WorkspacePayload> {
   const cacheKey = workspaceCacheKey(viewer.id, "full");
-  const cached = readServerCache<WorkspacePayload>(cacheKey);
-  if (cached) return cached;
+  if (!options?.fresh) {
+    const cached = readServerCache<WorkspacePayload>(cacheKey);
+    if (cached) return cached;
+  }
 
   const vk = notifUserKey(viewer);
   const [records, catalogs, dismissedIds, meta] = await Promise.all([
@@ -135,7 +143,9 @@ export async function loadWorkspaceData(
     recordsComplete: true,
   };
 
-  writeServerCache(cacheKey, payload, 8_000);
+  if (!options?.fresh) {
+    writeServerCache(cacheKey, payload, 2_000);
+  }
   return payload;
 }
 
@@ -143,11 +153,14 @@ export async function loadWorkspaceData(
 export async function loadWorkspaceBootstrap(
   viewer: SessionUser,
   limit = WORKSPACE_BOOTSTRAP_RECORD_LIMIT,
+  options?: LoadWorkspaceOptions,
 ): Promise<WorkspacePayload> {
   const safeLimit = Math.min(500, Math.max(1, Math.floor(limit)));
   const cacheKey = workspaceCacheKey(viewer.id, `bootstrap:${safeLimit}`);
-  const cached = readServerCache<WorkspacePayload>(cacheKey);
-  if (cached) return cached;
+  if (!options?.fresh) {
+    const cached = readServerCache<WorkspacePayload>(cacheKey);
+    if (cached) return cached;
+  }
 
   const vk = notifUserKey(viewer);
   const [records, catalogs, dismissedIds, meta] = await Promise.all([
@@ -179,6 +192,8 @@ export async function loadWorkspaceBootstrap(
     recordsComplete: false,
   };
 
-  writeServerCache(cacheKey, payload, 4_000);
+  if (!options?.fresh) {
+    writeServerCache(cacheKey, payload, 2_000);
+  }
   return payload;
 }

@@ -14,6 +14,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { useWorkspaceStore } from "@/store/workspace-store";
 
 const DEBOUNCE_MS = 250;
+const MUTATION_DEBOUNCE_MS = 0;
 
 type FetchResult =
   | { kind: "unauthorized" }
@@ -22,11 +23,19 @@ type FetchResult =
   | { kind: "full"; data: WorkspacePayload }
   | { kind: "bootstrap"; data: WorkspacePayload };
 
-async function fetchWorkspaceBootstrap(): Promise<FetchResult> {
-  const params = new URLSearchParams({
-    bootstrap: "1",
-    limit: String(WORKSPACE_BOOTSTRAP_RECORD_LIMIT),
-  });
+function withFreshParam(params: URLSearchParams, fresh: boolean): URLSearchParams {
+  if (fresh) params.set("fresh", "1");
+  return params;
+}
+
+async function fetchWorkspaceBootstrap(fresh = false): Promise<FetchResult> {
+  const params = withFreshParam(
+    new URLSearchParams({
+      bootstrap: "1",
+      limit: String(WORKSPACE_BOOTSTRAP_RECORD_LIMIT),
+    }),
+    fresh,
+  );
 
   const res = await fetch(`/api/workspace?${params}`, {
     credentials: "include",
@@ -42,8 +51,9 @@ async function fetchWorkspaceBootstrap(): Promise<FetchResult> {
 
 async function fetchWorkspaceVersion(
   currentVersion: string,
+  fresh = false,
 ): Promise<FetchResult> {
-  const params = new URLSearchParams({ mode: "version" });
+  const params = withFreshParam(new URLSearchParams({ mode: "version" }), fresh);
   if (currentVersion) params.set("version", currentVersion);
 
   const res = await fetch(`/api/workspace?${params}`, {
@@ -61,16 +71,20 @@ async function fetchWorkspaceVersion(
   return { kind: "version", data };
 }
 
-async function fetchWorkspaceFull(currentVersion: string): Promise<FetchResult> {
-  const params = new URLSearchParams();
+async function fetchWorkspaceFull(
+  currentVersion: string,
+  fresh = false,
+): Promise<FetchResult> {
+  const params = withFreshParam(new URLSearchParams(), fresh);
   if (currentVersion) params.set("version", currentVersion);
+  const useConditional = Boolean(currentVersion) && !fresh;
 
   const res = await fetch(
     params.size ? `/api/workspace?${params}` : "/api/workspace",
     {
       credentials: "include",
       cache: "no-store",
-      headers: currentVersion ? { "If-None-Match": `"${currentVersion}"` } : {},
+      headers: useConditional ? { "If-None-Match": `"${currentVersion}"` } : {},
     },
   );
 
@@ -134,7 +148,11 @@ export default function WorkspaceSync({
       );
     };
 
-    const runSync = async (background: boolean, forceFull = false) => {
+    const runSync = async (
+      background: boolean,
+      forceFull = false,
+      fresh = false,
+    ) => {
       if (syncing.current) {
         pending.current = true;
         return;
@@ -145,7 +163,7 @@ export default function WorkspaceSync({
         let state = useWorkspaceStore.getState();
 
         if (!state.ready) {
-          const boot = await fetchWorkspaceBootstrap();
+          const boot = await fetchWorkspaceBootstrap(fresh);
           if (cancelled) return;
           if (boot.kind === "unauthorized") {
             handleUnauthorized();
@@ -158,7 +176,7 @@ export default function WorkspaceSync({
         }
 
         if (!state.ready) {
-          const full = await fetchWorkspaceFull("");
+          const full = await fetchWorkspaceFull("", fresh);
           if (cancelled) return;
           if (full.kind === "unauthorized") {
             handleUnauthorized();
@@ -170,15 +188,16 @@ export default function WorkspaceSync({
           return;
         }
 
-        const needsFull = forceFull || !state.recordsComplete;
+        const needsFull = forceFull || !state.recordsComplete || fresh;
         if (needsFull) {
           if (!background && state.ready) {
             useWorkspaceStore.setState({ syncSource: "syncing" });
           }
           // Never send If-None-Match until history is complete — bootstrap shares
           // the same DB meta version but only carries the latest N rows.
-          const versionForFetch = state.recordsComplete ? state.version : "";
-          const full = await fetchWorkspaceFull(versionForFetch);
+          const versionForFetch =
+            fresh || !state.recordsComplete ? "" : state.version;
+          const full = await fetchWorkspaceFull(versionForFetch, fresh);
           if (cancelled) return;
           if (full.kind === "unauthorized") {
             handleUnauthorized();
@@ -186,13 +205,13 @@ export default function WorkspaceSync({
           }
           if (full.kind === "full") {
             applyFull(full.data);
-          } else if (full.kind === "unchanged" && state.recordsComplete) {
+          } else if (full.kind === "unchanged" && state.recordsComplete && !fresh) {
             useWorkspaceStore.getState().touchNetwork(state.version);
           }
           return;
         }
 
-        const versionResult = await fetchWorkspaceVersion(state.version);
+        const versionResult = await fetchWorkspaceVersion(state.version, fresh);
         if (cancelled) return;
         if (versionResult.kind === "unauthorized") {
           handleUnauthorized();
@@ -200,7 +219,7 @@ export default function WorkspaceSync({
         }
 
         if (versionResult.kind === "version") {
-          const full = await fetchWorkspaceFull("");
+          const full = await fetchWorkspaceFull("", true);
           if (cancelled) return;
           if (full.kind === "unauthorized") {
             handleUnauthorized();
@@ -221,19 +240,25 @@ export default function WorkspaceSync({
         syncing.current = false;
         if (pending.current) {
           pending.current = false;
-          void runSync(true);
+          void runSync(true, true, true);
         }
       }
     };
 
-    const scheduleSync = (background: boolean, forceFull = false) => {
+    const scheduleSync = (
+      background: boolean,
+      forceFull = false,
+      fresh = false,
+    ) => {
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      const delay = fresh ? MUTATION_DEBOUNCE_MS : DEBOUNCE_MS;
       debounceTimer.current = setTimeout(() => {
-        void runSync(background, forceFull);
-      }, DEBOUNCE_MS);
+        void runSync(background, forceFull, fresh);
+      }, delay);
     };
 
-    void runSync(false, !useWorkspaceStore.getState().recordsComplete);
+    const hadCache = useWorkspaceStore.getState().syncSource === "cache";
+    void runSync(false, !useWorkspaceStore.getState().recordsComplete, hadCache);
 
     let lastDbNode: string | null = null;
     const pollDbHealth = async () => {
@@ -244,7 +269,7 @@ export default function WorkspaceSync({
         const body = (await res.json()) as { activeNode?: string | null };
         const node = body.activeNode ?? null;
         if (lastDbNode != null && node != null && node !== lastDbNode) {
-          scheduleSync(false, true);
+          scheduleSync(false, true, true);
         }
         lastDbNode = node;
       } catch {
@@ -262,10 +287,15 @@ export default function WorkspaceSync({
     const onVisible = () => {
       if (document.visibilityState === "visible") scheduleSync(true);
     };
-    const onReconnect = () => scheduleSync(false, true);
+    const onReconnect = () => scheduleSync(false, true, true);
     const onMutationSync = (event: Event) => {
-      const detail = (event as CustomEvent<{ forceFull?: boolean }>).detail;
-      scheduleSync(true, Boolean(detail?.forceFull));
+      const detail = (event as CustomEvent<{ forceFull?: boolean; fresh?: boolean }>)
+        .detail;
+      scheduleSync(
+        true,
+        detail?.forceFull !== false,
+        Boolean(detail?.fresh ?? true),
+      );
     };
 
     document.addEventListener("visibilitychange", onVisible);

@@ -11,6 +11,8 @@ import {
   loadWorkspaceBootstrap,
 } from "@/lib/workspace/load-workspace";
 
+export const dynamic = "force-dynamic";
+
 export default async function AppLayout({
   children,
 }: {
@@ -26,7 +28,9 @@ export default async function AppLayout({
   if (pathname && !routeAllowedForRole(pathname, hydrated.role)) {
     redirect(ROUTES.dashboard);
   }
-  const initialWorkspace = await loadWorkspaceBootstrap(hydrated);
+  const initialWorkspace = await loadWorkspaceBootstrap(hydrated, undefined, {
+    fresh: true,
+  });
 
   return (
     <>

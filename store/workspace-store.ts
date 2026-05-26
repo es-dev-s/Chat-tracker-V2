@@ -29,6 +29,8 @@ type WorkspaceState = {
   recordsComplete: boolean;
   syncSource: SyncSource;
   cacheKey: string | null;
+  /** Bumped on local record CRUD — blocks stale network snapshots from rolling back UI. */
+  localRevision: number;
 
   bootstrapFromCache: (user: SessionUser) => boolean;
   applyPayload: (payload: WorkspacePayload, source: SyncSource) => void;
@@ -64,6 +66,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   recordsComplete: false,
   syncSource: "idle",
   cacheKey: null,
+  localRevision: 0,
 
   bootstrapFromCache: (user) => {
     const key = workspaceCacheKey(user);
@@ -91,8 +94,39 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
 
   applyPayload: (payload, source) => {
-    const { cacheKey } = get();
+    const state = get();
+    const { cacheKey, localRevision, version } = state;
     const complete = payload.recordsComplete !== false;
+
+    const staleNetworkSnapshot =
+      source === "network" &&
+      localRevision > 0 &&
+      Boolean(version) &&
+      payload.version === version;
+
+    if (staleNetworkSnapshot) {
+      set({
+        dismissedNotifs: payload.dismissedNotifs,
+        notifUserKey: payload.notifUserKey,
+        fetchedAt: payload.fetchedAt,
+        syncSource: source,
+      });
+      if (cacheKey) {
+        writeWorkspaceCache(cacheKey, {
+          version: state.version,
+          fetchedAt: payload.fetchedAt,
+          records: state.records,
+          users: state.users,
+          teams: state.teams,
+          profiles: state.profiles,
+          dismissedNotifs: payload.dismissedNotifs,
+          notifUserKey: payload.notifUserKey,
+          recordsComplete: state.recordsComplete,
+        });
+      }
+      return;
+    }
+
     set({
       version: payload.version,
       fetchedAt: payload.fetchedAt,
@@ -105,6 +139,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       ready: true,
       recordsComplete: complete,
       syncSource: source,
+      localRevision: source === "network" ? 0 : state.localRevision,
     });
     if (cacheKey) writeWorkspaceCache(cacheKey, { ...payload, recordsComplete: complete });
   },
@@ -137,13 +172,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   patchRecord: (record) => {
     const state = get();
+    const localRevision = state.localRevision + 1;
     const exists = state.records.some((r) => r.id === record.id);
     const records = exists
       ? state.records.map((r) => (r.id === record.id ? record : r))
       : [record, ...state.records].sort(
           (a, b) => b.date.localeCompare(a.date) || b.id - a.id,
         );
-    set({ records });
+    set({ records, localRevision });
     if (state.cacheKey) {
       writeWorkspaceCache(state.cacheKey, {
         version: state.version,
@@ -161,8 +197,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   removeRecord: (recordId) => {
     const state = get();
+    const localRevision = state.localRevision + 1;
     const records = state.records.filter((r) => r.id !== recordId);
-    set({ records });
+    set({ records, localRevision });
     if (state.cacheKey) {
       writeWorkspaceCache(state.cacheKey, {
         version: state.version,
@@ -196,6 +233,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       recordsComplete: false,
       syncSource: "idle",
       cacheKey: null,
+      localRevision: 0,
     });
   },
 

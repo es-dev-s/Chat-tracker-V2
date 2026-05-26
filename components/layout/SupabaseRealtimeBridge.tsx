@@ -65,7 +65,7 @@ export default function SupabaseRealtimeBridge() {
           "postgres_changes",
           { event: "*", schema: "public", table: "chat_records" },
           () => {
-            requestWorkspaceSync(false);
+            requestWorkspaceSync(true, true);
           },
         )
         .subscribe((status) => {

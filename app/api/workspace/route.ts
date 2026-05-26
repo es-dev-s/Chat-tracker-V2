@@ -27,13 +27,15 @@ export async function GET(request: Request) {
 
     const hydrated = hydrateSessionUser(viewer);
     const url = new URL(request.url);
+    const fresh = url.searchParams.get("fresh") === "1";
+    const loadOpts = fresh ? { fresh: true as const } : undefined;
     const mode = url.searchParams.get("mode");
     const clientVersion =
       url.searchParams.get("version") ||
       request.headers.get("if-none-match")?.replace(/^"|"$/g, "");
 
     if (mode === "version") {
-      const payload = await loadWorkspaceVersion(hydrated);
+      const payload = await loadWorkspaceVersion(hydrated, loadOpts);
       if (clientVersion && clientVersion === payload.version) {
         return new NextResponse(null, {
           status: 304,
@@ -59,7 +61,7 @@ export async function GET(request: Request) {
       const limit = limitParam
         ? Math.min(500, Math.max(1, parseInt(limitParam, 10) || WORKSPACE_BOOTSTRAP_RECORD_LIMIT))
         : WORKSPACE_BOOTSTRAP_RECORD_LIMIT;
-      const payload = await loadWorkspaceBootstrap(hydrated, limit);
+      const payload = await loadWorkspaceBootstrap(hydrated, limit, loadOpts);
       return NextResponse.json(payload, {
         headers: {
           "Cache-Control": "private, no-store, max-age=0",
@@ -70,7 +72,7 @@ export async function GET(request: Request) {
       });
     }
 
-    const payload = await loadWorkspaceData(hydrated);
+    const payload = await loadWorkspaceData(hydrated, loadOpts);
     if (clientVersion && clientVersion === payload.version) {
       return new NextResponse(null, {
         status: 304,

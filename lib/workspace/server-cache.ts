@@ -31,6 +31,13 @@ export function invalidateServerCachePrefix(prefix: string): void {
   }
 }
 
+/** Drop every workspace/catalog server entry — use after any DB mutation. */
+export function clearWorkspaceServerCache(): void {
+  for (const key of store.keys()) {
+    if (key.startsWith("ws:")) store.delete(key);
+  }
+}
+
 export function workspaceCacheKey(
   viewerId: string | number,
   mode: "full" | "version" | `bootstrap:${number}`,
