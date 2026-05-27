@@ -29,7 +29,7 @@ export { hydrateSessionUser } from "@/lib/shell/load-shell-data";
 type RecordScope = ChatRecord[] | RecordLike[];
 
 const CATALOG_CACHE_KEY = "ws:shared:catalogs";
-const CATALOG_TTL_MS = 30_000;
+const CATALOG_TTL_MS = 5_000;
 
 type SharedCatalogs = {
   allUsers: Awaited<ReturnType<typeof readUsers>>;

@@ -33,7 +33,11 @@ type WorkspaceState = {
   localRevision: number;
 
   bootstrapFromCache: (user: SessionUser) => boolean;
-  applyPayload: (payload: WorkspacePayload, source: SyncSource) => void;
+  applyPayload: (
+    payload: WorkspacePayload,
+    source: SyncSource,
+    options?: { force?: boolean },
+  ) => void;
   mergeVersionPayload: (payload: WorkspaceVersionPayload, source: SyncSource) => void;
   patchRecord: (record: ChatRecord) => void;
   removeRecord: (recordId: number) => void;
@@ -93,12 +97,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     return true;
   },
 
-  applyPayload: (payload, source) => {
+  applyPayload: (payload, source, options) => {
     const state = get();
     const { cacheKey, localRevision, version } = state;
     const complete = payload.recordsComplete !== false;
+    const force = options?.force === true;
 
     const staleNetworkSnapshot =
+      !force &&
       source === "network" &&
       localRevision > 0 &&
       Boolean(version) &&

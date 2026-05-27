@@ -120,16 +120,18 @@ export function computeDashboardStats(filtered: ChatRecord[]): DashboardStats {
     if (tc != null && Number.isFinite(tc)) byT[k].tcList.push(tc);
   }
 
-  const teamData = Object.values(byT).map((t) => ({
-    name: t.name,
-    chats: t.chats,
-    avgReply: t.rdList.length
-      ? t.rdList.reduce((s, v) => s + v, 0) / t.rdList.length
-      : null,
-    avgConv: t.tcList.length
-      ? t.tcList.reduce((s, v) => s + v, 0) / t.tcList.length
-      : null,
-  }));
+  const teamData = Object.values(byT)
+    .map((t) => ({
+      name: t.name,
+      chats: t.chats,
+      avgReply: t.rdList.length
+        ? t.rdList.reduce((s, v) => s + v, 0) / t.rdList.length
+        : null,
+      avgConv: t.tcList.length
+        ? t.tcList.reduce((s, v) => s + v, 0) / t.tcList.length
+        : null,
+    }))
+    .sort((a, b) => b.chats - a.chats);
 
   const byDate: Record<string, { date: string; chats: number; rdList: number[] }> = {};
   for (const r of filtered) {

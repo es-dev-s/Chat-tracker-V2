@@ -1,4 +1,5 @@
 import type { ChatRecord } from "@/lib/db/records";
+import { invalidateWorkspaceClientCache } from "@/lib/workspace/cache";
 import { requestWorkspaceSync } from "@/lib/workspace/sync-events";
 import { useAuthStore } from "@/store/auth-store";
 import { useWorkspaceStore } from "@/store/workspace-store";
@@ -12,13 +13,22 @@ async function parseApiError(res: Response): Promise<string> {
   }
 }
 
-/** Reconcile with DB immediately after writes — bypasses stale server/client caches. */
-function scheduleWorkspaceRefresh(forceFull = true): void {
-  requestWorkspaceSync(forceFull, true);
+function invalidateClientWorkspaceCache(): void {
+  invalidateWorkspaceClientCache(useWorkspaceStore.getState().cacheKey);
+}
+
+/** Wait for a fresh DB snapshot — keeps UI aligned with Supabase after writes. */
+async function reconcileWorkspaceAfterMutation(): Promise<void> {
+  invalidateClientWorkspaceCache();
+  try {
+    await requestWorkspaceSync(true, true);
+  } catch {
+    // API mutation already succeeded; background poll/realtime will retry.
+  }
 }
 
 export async function refreshWorkspaceAfterMutation(): Promise<boolean> {
-  scheduleWorkspaceRefresh(true);
+  await reconcileWorkspaceAfterMutation();
   return true;
 }
 
@@ -39,7 +49,7 @@ export async function postChatRecord(
   const data = await res.json();
   const saved = data.record as ChatRecord;
   useWorkspaceStore.getState().patchRecord(saved);
-  scheduleWorkspaceRefresh();
+  await reconcileWorkspaceAfterMutation();
   return saved;
 }
 
@@ -59,7 +69,7 @@ export async function patchChatRecord(record: ChatRecord | Record<string, unknow
   const data = await res.json();
   const saved = data.record as ChatRecord;
   useWorkspaceStore.getState().patchRecord(saved);
-  scheduleWorkspaceRefresh();
+  await reconcileWorkspaceAfterMutation();
   return saved;
 }
 
@@ -85,7 +95,7 @@ export async function deleteChatRecord(id: number): Promise<void> {
     });
     throw new Error(await parseApiError(res));
   }
-  scheduleWorkspaceRefresh();
+  await reconcileWorkspaceAfterMutation();
 }
 
 export async function createUser(user: Record<string, unknown>, role: "analyst" | "mainTeamLead" = "analyst") {
@@ -98,7 +108,7 @@ export async function createUser(user: Record<string, unknown>, role: "analyst" 
   });
   if (!res.ok) throw new Error(await parseApiError(res));
   const data = await res.json();
-  scheduleWorkspaceRefresh(true);
+  await reconcileWorkspaceAfterMutation();
   return data.user;
 }
 
@@ -111,7 +121,7 @@ export async function patchUser(userId: string | number, user: Record<string, un
   });
   if (!res.ok) throw new Error(await parseApiError(res));
   const data = await res.json();
-  scheduleWorkspaceRefresh(true);
+  await reconcileWorkspaceAfterMutation();
   return data.user;
 }
 
@@ -121,7 +131,7 @@ export async function deleteUser(userId: string | number) {
     credentials: "include",
   });
   if (!res.ok) throw new Error(await parseApiError(res));
-  scheduleWorkspaceRefresh(true);
+  await reconcileWorkspaceAfterMutation();
 }
 
 export async function addTeam(name: string) {
@@ -132,7 +142,7 @@ export async function addTeam(name: string) {
     body: JSON.stringify({ name }),
   });
   if (!res.ok) throw new Error(await parseApiError(res));
-  scheduleWorkspaceRefresh(true);
+  await reconcileWorkspaceAfterMutation();
 }
 
 export async function deleteTeam(name: string) {
@@ -141,7 +151,7 @@ export async function deleteTeam(name: string) {
     credentials: "include",
   });
   if (!res.ok) throw new Error(await parseApiError(res));
-  scheduleWorkspaceRefresh(true);
+  await reconcileWorkspaceAfterMutation();
 }
 
 export async function addProfile(name: string) {
@@ -152,7 +162,7 @@ export async function addProfile(name: string) {
     body: JSON.stringify({ name }),
   });
   if (!res.ok) throw new Error(await parseApiError(res));
-  scheduleWorkspaceRefresh(true);
+  await reconcileWorkspaceAfterMutation();
 }
 
 export async function deleteProfile(name: string) {
@@ -161,5 +171,5 @@ export async function deleteProfile(name: string) {
     credentials: "include",
   });
   if (!res.ok) throw new Error(await parseApiError(res));
-  scheduleWorkspaceRefresh(true);
+  await reconcileWorkspaceAfterMutation();
 }

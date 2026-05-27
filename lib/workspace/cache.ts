@@ -76,3 +76,13 @@ export function clearAllWorkspaceCaches(): void {
     //
   }
 }
+
+/** Drop persisted workspace snapshot for the active user (after mutations). */
+export function invalidateWorkspaceClientCache(cacheKey: string | null): void {
+  if (typeof window === "undefined" || !cacheKey) return;
+  try {
+    localStorage.removeItem(cacheKey);
+  } catch {
+    //
+  }
+}

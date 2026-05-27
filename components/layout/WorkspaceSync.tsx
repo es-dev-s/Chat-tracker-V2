@@ -9,7 +9,12 @@ import {
 } from "@/lib/workspace/constants";
 import { workspaceCacheKey } from "@/lib/workspace/cache";
 import type { WorkspacePayload, WorkspaceVersionPayload } from "@/lib/workspace/cache";
-import { WORKSPACE_SYNC_EVENT } from "@/lib/workspace/sync-events";
+import {
+  WORKSPACE_SYNC_EVENT,
+  completeWorkspaceSyncWaiters,
+  failWorkspaceSyncWaiters,
+  type WorkspaceSyncDetail,
+} from "@/lib/workspace/sync-events";
 import { useAuthStore } from "@/store/auth-store";
 import { useWorkspaceStore } from "@/store/workspace-store";
 
@@ -112,15 +117,19 @@ export default function WorkspaceSync({
   const seededServer = useRef(false);
   const syncing = useRef(false);
   const pending = useRef(false);
+  const pendingFresh = useRef(false);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   if (!bootstrapped.current) {
     const key = workspaceCacheKey(user);
     useWorkspaceStore.setState({ cacheKey: key, notifUserKey: notifUserKey(user) });
-    const hadCache = useWorkspaceStore.getState().bootstrapFromCache(user);
-    if (!hadCache && initialPayload) {
-      useWorkspaceStore.getState().applyPayload(initialPayload, "network");
+    if (initialPayload) {
+      useWorkspaceStore.getState().applyPayload(initialPayload, "network", {
+        force: true,
+      });
       seededServer.current = true;
+    } else {
+      useWorkspaceStore.getState().bootstrapFromCache(user);
     }
     bootstrapped.current = true;
   }
@@ -128,7 +137,9 @@ export default function WorkspaceSync({
   useLayoutEffect(() => {
     if (seededServer.current || !initialPayload) return;
     if (!useWorkspaceStore.getState().ready) {
-      useWorkspaceStore.getState().applyPayload(initialPayload, "network");
+      useWorkspaceStore.getState().applyPayload(initialPayload, "network", {
+        force: true,
+      });
       seededServer.current = true;
     }
   }, [initialPayload]);
@@ -141,10 +152,11 @@ export default function WorkspaceSync({
       void useAuthStore.getState().logout();
     };
 
-    const applyFull = (data: WorkspacePayload) => {
+    const applyFull = (data: WorkspacePayload, force = false) => {
       useWorkspaceStore.getState().applyPayload(
         { ...data, recordsComplete: true },
         "network",
+        { force },
       );
     };
 
@@ -155,9 +167,12 @@ export default function WorkspaceSync({
     ) => {
       if (syncing.current) {
         pending.current = true;
+        if (fresh) pendingFresh.current = true;
         return;
       }
       syncing.current = true;
+      const settleFreshWaiters = fresh || pendingFresh.current;
+      if (fresh) pendingFresh.current = false;
 
       try {
         let state = useWorkspaceStore.getState();
@@ -166,11 +181,16 @@ export default function WorkspaceSync({
           const boot = await fetchWorkspaceBootstrap(fresh);
           if (cancelled) return;
           if (boot.kind === "unauthorized") {
+            if (settleFreshWaiters) {
+              failWorkspaceSyncWaiters(new Error("UNAUTHORIZED"));
+            }
             handleUnauthorized();
             return;
           }
           if (boot.kind === "bootstrap") {
-            useWorkspaceStore.getState().applyPayload(boot.data, "network");
+            useWorkspaceStore.getState().applyPayload(boot.data, "network", {
+              force: fresh,
+            });
           }
           state = useWorkspaceStore.getState();
         }
@@ -179,11 +199,14 @@ export default function WorkspaceSync({
           const full = await fetchWorkspaceFull("", fresh);
           if (cancelled) return;
           if (full.kind === "unauthorized") {
+            if (settleFreshWaiters) {
+              failWorkspaceSyncWaiters(new Error("UNAUTHORIZED"));
+            }
             handleUnauthorized();
             return;
           }
           if (full.kind === "full") {
-            applyFull(full.data);
+            applyFull(full.data, true);
           }
           return;
         }
@@ -200,11 +223,14 @@ export default function WorkspaceSync({
           const full = await fetchWorkspaceFull(versionForFetch, fresh);
           if (cancelled) return;
           if (full.kind === "unauthorized") {
+            if (settleFreshWaiters) {
+              failWorkspaceSyncWaiters(new Error("UNAUTHORIZED"));
+            }
             handleUnauthorized();
             return;
           }
           if (full.kind === "full") {
-            applyFull(full.data);
+            applyFull(full.data, fresh);
           } else if (full.kind === "unchanged" && state.recordsComplete && !fresh) {
             useWorkspaceStore.getState().touchNetwork(state.version);
           }
@@ -214,6 +240,9 @@ export default function WorkspaceSync({
         const versionResult = await fetchWorkspaceVersion(state.version, fresh);
         if (cancelled) return;
         if (versionResult.kind === "unauthorized") {
+          if (settleFreshWaiters) {
+            failWorkspaceSyncWaiters(new Error("UNAUTHORIZED"));
+          }
           handleUnauthorized();
           return;
         }
@@ -222,13 +251,17 @@ export default function WorkspaceSync({
           const full = await fetchWorkspaceFull("", true);
           if (cancelled) return;
           if (full.kind === "unauthorized") {
+            if (settleFreshWaiters) {
+              failWorkspaceSyncWaiters(new Error("UNAUTHORIZED"));
+            }
             handleUnauthorized();
             return;
           }
           if (full.kind === "full") {
-            applyFull(full.data);
+            applyFull(full.data, true);
           } else {
             pending.current = true;
+            pendingFresh.current = true;
           }
           return;
         }
@@ -236,11 +269,22 @@ export default function WorkspaceSync({
         if (versionResult.kind === "unchanged") {
           useWorkspaceStore.getState().touchNetwork(state.version);
         }
+      } catch (err) {
+        if (settleFreshWaiters) {
+          failWorkspaceSyncWaiters(
+            err instanceof Error ? err : new Error(String(err)),
+          );
+        }
       } finally {
+        if (settleFreshWaiters && !cancelled) {
+          completeWorkspaceSyncWaiters();
+        }
         syncing.current = false;
         if (pending.current) {
+          const nextFresh = pendingFresh.current;
           pending.current = false;
-          void runSync(true, true, true);
+          pendingFresh.current = false;
+          void runSync(true, true, nextFresh);
         }
       }
     };
@@ -257,8 +301,7 @@ export default function WorkspaceSync({
       }, delay);
     };
 
-    const hadCache = useWorkspaceStore.getState().syncSource === "cache";
-    void runSync(false, !useWorkspaceStore.getState().recordsComplete, hadCache);
+    void runSync(false, !useWorkspaceStore.getState().recordsComplete, true);
 
     let lastDbNode: string | null = null;
     const pollDbHealth = async () => {
@@ -289,8 +332,7 @@ export default function WorkspaceSync({
     };
     const onReconnect = () => scheduleSync(false, true, true);
     const onMutationSync = (event: Event) => {
-      const detail = (event as CustomEvent<{ forceFull?: boolean; fresh?: boolean }>)
-        .detail;
+      const detail = (event as CustomEvent<WorkspaceSyncDetail>).detail;
       scheduleSync(
         true,
         detail?.forceFull !== false,

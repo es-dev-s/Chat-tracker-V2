@@ -1,11 +1,25 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { C, RAD } from "@/lib/design/tokens";
 import { isValidIsoDateString, parseIsoDateParts } from "@/lib/utils/date-iso";
 import { inputStyle } from "@/lib/styles/controls";
 import type { CSSProperties } from "react";
+
+const POPOVER_MIN_W = 272;
+const POPOVER_MAX_W = 336;
+const POPOVER_ESTIMATE_H = 300;
+const VIEWPORT_MARGIN = 12;
+const POPOVER_GAP = 6;
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -13,6 +27,51 @@ function pad2(n: number): string {
 
 function toIso(y: number, m0: number, day: number): string {
   return `${y}-${pad2(m0 + 1)}-${pad2(day)}`;
+}
+
+type PopoverPlacement = "above" | "below";
+
+type PopoverCoords = {
+  top: number;
+  left: number;
+  width: number;
+  placement: PopoverPlacement;
+};
+
+function computePopoverCoords(
+  anchor: DOMRect,
+  popoverHeight: number,
+  popoverWidth: number,
+): PopoverCoords {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const width = Math.min(popoverWidth, vw - VIEWPORT_MARGIN * 2);
+
+  const spaceBelow = vh - anchor.bottom - VIEWPORT_MARGIN;
+  const spaceAbove = anchor.top - VIEWPORT_MARGIN;
+  const fitsBelow = spaceBelow >= popoverHeight + POPOVER_GAP;
+  const fitsAbove = spaceAbove >= popoverHeight + POPOVER_GAP;
+  let placement: PopoverPlacement = "below";
+  if (!fitsBelow && (fitsAbove || spaceAbove > spaceBelow)) {
+    placement = "above";
+  }
+
+  let top =
+    placement === "below"
+      ? anchor.bottom + POPOVER_GAP
+      : anchor.top - POPOVER_GAP - popoverHeight;
+  top = Math.max(
+    VIEWPORT_MARGIN,
+    Math.min(top, vh - popoverHeight - VIEWPORT_MARGIN),
+  );
+
+  let left = anchor.left;
+  if (left + width > vw - VIEWPORT_MARGIN) {
+    left = Math.max(VIEWPORT_MARGIN, anchor.right - width);
+  }
+  if (left < VIEWPORT_MARGIN) left = VIEWPORT_MARGIN;
+
+  return { top, left, width, placement };
 }
 
 type CtDateInputProps = {
@@ -36,25 +95,78 @@ export default function CtDateInput({
   const wrapId = useId();
   const inputId = idProp || wrapId;
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [draft, setDraft] = useState(value || "");
+  const [popoverCoords, setPopoverCoords] = useState<PopoverCoords | null>(null);
   const [cursorMonth, setCursorMonth] = useState(() => {
     const p = parseIsoDateParts(value || "");
     const now = new Date();
     return p ? new Date(p.y, p.m, 1) : new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     setDraft(value || "");
   }, [value]);
 
+  const updatePopoverPosition = useCallback(() => {
+    const anchor = triggerRef.current;
+    if (!anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    const preferredWidth = Math.min(
+      POPOVER_MAX_W,
+      Math.max(POPOVER_MIN_W, rect.width),
+    );
+    const measuredH = popoverRef.current?.offsetHeight ?? POPOVER_ESTIMATE_H;
+    setPopoverCoords(
+      computePopoverCoords(rect, measuredH, preferredWidth),
+    );
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPopoverCoords(null);
+      return;
+    }
+    triggerRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    updatePopoverPosition();
+    const raf = window.requestAnimationFrame(() => updatePopoverPosition());
+    return () => window.cancelAnimationFrame(raf);
+  }, [open, cursorMonth, updatePopoverPosition]);
+
   useEffect(() => {
     if (!open) return;
-    const el = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    const onScrollOrResize = () => updatePopoverPosition();
+    window.addEventListener("resize", onScrollOrResize);
+    window.addEventListener("scroll", onScrollOrResize, true);
+    return () => {
+      window.removeEventListener("resize", onScrollOrResize);
+      window.removeEventListener("scroll", onScrollOrResize, true);
     };
-    document.addEventListener("mousedown", el);
-    return () => document.removeEventListener("mousedown", el);
+  }, [open, updatePopoverPosition]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (rootRef.current?.contains(t) || popoverRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [open]);
 
   const commitDraft = () => {
@@ -129,13 +241,78 @@ export default function CtDateInput({
     setOpen(false);
   };
 
+  const calendarPopover =
+    open && popoverCoords && mounted ? (
+      <div
+        ref={popoverRef}
+        className={`ct-date-input__popover ct-date-input__popover--${popoverCoords.placement}`}
+        role="dialog"
+        aria-label="Choose date"
+        style={{
+          top: popoverCoords.top,
+          left: popoverCoords.left,
+          width: popoverCoords.width,
+        }}
+      >
+        <div className="ct-date-input__popover-nav">
+          <button
+            type="button"
+            aria-label="Previous month"
+            className="ct-date-input__popover-nav-btn"
+            onClick={() => setCursorMonth(new Date(cy, cm - 1, 1))}
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <div className="ct-date-input__popover-title">
+            {cursorMonth.toLocaleString(undefined, { month: "long", year: "numeric" })}
+          </div>
+          <button
+            type="button"
+            aria-label="Next month"
+            className="ct-date-input__popover-nav-btn"
+            onClick={() => setCursorMonth(new Date(cy, cm + 1, 1))}
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+        <div className="ct-date-input__popover-weekdays" aria-hidden>
+          {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((w) => (
+            <div key={w}>{w}</div>
+          ))}
+        </div>
+        <div className="ct-date-input__popover-grid">
+          {cells.map((day, idx) =>
+            day == null ? (
+              <div key={`e-${idx}`} />
+            ) : (
+              <button
+                key={day}
+                type="button"
+                className={`ct-date-input__popover-day${toIso(cy, cm, day) === value ? " ct-date-input__popover-day--selected" : ""}`}
+                onClick={() => pickDay(day)}
+              >
+                {day}
+              </button>
+            ),
+          )}
+        </div>
+      </div>
+    ) : null;
+
   return (
     <div
       ref={rootRef}
-      className={compact ? "ct-date-input ct-date-input--compact" : undefined}
+      className={[
+        compact ? "ct-date-input ct-date-input--compact" : "ct-date-input",
+        open ? "ct-date-input--open" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       style={{ position: "relative", width: "100%" }}
     >
       <div
+        ref={triggerRef}
+        className="ct-date-input__trigger"
         style={
           compact
             ? { position: "relative", width: "100%" }
@@ -145,6 +322,8 @@ export default function CtDateInput({
         <input
           id={inputId}
           aria-label={ariaLabel}
+          aria-expanded={open}
+          aria-haspopup="dialog"
           className={compact ? "ct-input ct-date-input__field" : undefined}
           style={{ ...baseInput, flex: 1, minWidth: compact ? 0 : 120, width: "100%" }}
           value={draft}
@@ -156,120 +335,22 @@ export default function CtDateInput({
               e.preventDefault();
               commitDraft();
             }
+            if (e.key === "Escape") setOpen(false);
           }}
         />
         <button
           type="button"
           aria-label="Open calendar"
+          aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
           style={calendarBtnStyle}
         >
           <Calendar size={compact ? 14 : 18} strokeWidth={2} aria-hidden />
         </button>
       </div>
-      {open ? (
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            top: "calc(100% + 6px)",
-            zIndex: 9500,
-            width: "min(100%, 336px)",
-            minWidth: 272,
-            maxWidth: "calc(100vw - 32px)",
-            padding: 12,
-            borderRadius: RAD.md,
-            border: `1px solid ${C.border}`,
-            background: C.surface,
-            boxShadow: "0 14px 36px rgba(15,23,42,0.12)",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 10,
-            }}
-          >
-            <button
-              type="button"
-              aria-label="Previous month"
-              onClick={() => setCursorMonth(new Date(cy, cm - 1, 1))}
-              style={{
-                border: "none",
-                background: "transparent",
-                padding: 6,
-                cursor: "pointer",
-                color: C.text,
-                borderRadius: RAD.sm,
-              }}
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <div style={{ fontWeight: 700, fontSize: 13, color: C.text }}>
-              {cursorMonth.toLocaleString(undefined, { month: "long", year: "numeric" })}
-            </div>
-            <button
-              type="button"
-              aria-label="Next month"
-              onClick={() => setCursorMonth(new Date(cy, cm + 1, 1))}
-              style={{
-                border: "none",
-                background: "transparent",
-                padding: 6,
-                cursor: "pointer",
-                color: C.text,
-                borderRadius: RAD.sm,
-              }}
-            >
-              <ChevronRight size={18} />
-            </button>
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(7, 1fr)",
-              gap: 2,
-              textAlign: "center",
-              fontSize: 10,
-              fontWeight: 600,
-              color: C.muted,
-              marginBottom: 6,
-            }}
-          >
-            {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((w) => (
-              <div key={w}>{w}</div>
-            ))}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
-            {cells.map((day, idx) =>
-              day == null ? (
-                <div key={`e-${idx}`} />
-              ) : (
-                <button
-                  key={day}
-                  type="button"
-                  onClick={() => pickDay(day)}
-                  style={{
-                    border: "none",
-                    borderRadius: RAD.sm,
-                    padding: "7px 0",
-                    fontSize: 12,
-                    fontWeight: toIso(cy, cm, day) === value ? 700 : 500,
-                    cursor: "pointer",
-                    background:
-                      toIso(cy, cm, day) === value ? "rgba(37,99,235,0.18)" : "transparent",
-                    color: C.text,
-                  }}
-                >
-                  {day}
-                </button>
-              ),
-            )}
-          </div>
-        </div>
-      ) : null}
+      {mounted && calendarPopover
+        ? createPortal(calendarPopover, document.body)
+        : null}
     </div>
   );
 }

@@ -1621,11 +1621,117 @@ input:focus-visible {
     0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
+.ct-date-input--open {
+  z-index: 2;
+}
+
+.ct-date-input__popover {
+  position: fixed;
+  z-index: 10050;
+  box-sizing: border-box;
+  padding: 12px;
+  border-radius: var(--ct-radius-md);
+  border: 1px solid rgba(214, 226, 240, 0.95);
+  background: var(--ct-surface);
+  box-shadow:
+    0 18px 40px rgba(15, 23, 42, 0.14),
+    0 4px 12px rgba(15, 23, 42, 0.06);
+}
+
+.ct-date-input__popover--above {
+  box-shadow:
+    0 -10px 32px rgba(15, 23, 42, 0.12),
+    0 4px 12px rgba(15, 23, 42, 0.06);
+}
+
+.ct-date-input__popover-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.ct-date-input__popover-nav-btn {
+  border: none;
+  background: transparent;
+  padding: 6px;
+  cursor: pointer;
+  color: var(--ct-text);
+  border-radius: var(--ct-radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ct-date-input__popover-nav-btn:hover {
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--ct-accent);
+}
+
+.ct-date-input__popover-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--ct-text);
+  text-align: center;
+  padding: 0 4px;
+}
+
+.ct-date-input__popover-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ct-muted);
+  margin-bottom: 6px;
+}
+
+.ct-date-input__popover-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.ct-date-input__popover-day {
+  border: none;
+  border-radius: var(--ct-radius-sm);
+  padding: 7px 0;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  background: transparent;
+  color: var(--ct-text);
+  transition: background-color 0.12s ease;
+}
+
+.ct-date-input__popover-day:hover {
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.ct-date-input__popover-day--selected {
+  font-weight: 700;
+  background: rgba(37, 99, 235, 0.18);
+}
+
+/* Keep date fields visible while calendar is open inside the scrollable filter rail */
+.ct-filter-rail__panel-inner:has(.ct-date-input--open) {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.ct-filter-section:has(.ct-date-input--open) {
+  overflow: visible;
+  position: relative;
+  z-index: 3;
+}
+
 .ct-filter-date-range {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 6px;
   align-items: end;
+  position: relative;
 }
 
 .ct-filter-date-range__sep {
