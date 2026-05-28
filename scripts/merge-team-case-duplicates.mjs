@@ -204,6 +204,24 @@ async function main() {
     }
   }
 
+  // Normalize chat_records.team even when tracker_teams has only one canonical casing.
+  const recordTeams = [...new Set(records.map((r) => String(r.team ?? "").trim()).filter(Boolean))];
+  let recordCaseMismatches = 0;
+  for (const team of recordTeams) {
+    const canonical = canonicalByLc.get(lc(team)) ?? team;
+    if (canonical !== team) recordCaseMismatches += 1;
+  }
+  if (recordCaseMismatches > 0) {
+    console.log(`Found ${recordCaseMismatches} record-team casing mismatches.`);
+  }
+  for (const team of recordTeams) {
+    const canonical = canonicalByLc.get(lc(team)) ?? team;
+    if (canonical === team) continue;
+    if (!apply) continue;
+    const upd = await sb.from("chat_records").update({ team: canonical }).eq("team", team);
+    if (upd.error) throw new Error(`chat_records.team ${team} -> ${canonical}: ${upd.error.message}`);
+  }
+
   const userRows = await sb.from("tracker_users").select("user_id, team_name, team_names");
   if (userRows.error) throw new Error(`read tracker_users team fields: ${userRows.error.message}`);
 
