@@ -19,11 +19,32 @@ export type AppUser = {
 };
 
 function normalizeTeamNames(raw: unknown): string[] {
-  if (Array.isArray(raw)) return raw.map(String);
+  if (Array.isArray(raw)) {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const v of raw) {
+      const t = String(v ?? "").trim();
+      const key = t.toLowerCase();
+      if (!t || seen.has(key)) continue;
+      seen.add(key);
+      out.push(t);
+    }
+    return out;
+  }
   if (typeof raw === "string") {
     try {
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed.map(String) : [];
+      if (!Array.isArray(parsed)) return [];
+      const out: string[] = [];
+      const seen = new Set<string>();
+      for (const v of parsed) {
+        const t = String(v ?? "").trim();
+        const key = t.toLowerCase();
+        if (!t || seen.has(key)) continue;
+        seen.add(key);
+        out.push(t);
+      }
+      return out;
     } catch {
       return [];
     }

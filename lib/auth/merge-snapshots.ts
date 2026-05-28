@@ -79,10 +79,10 @@ export function assertTeamLeadMayDeleteTeamName(
   const trimmed = String(teamName || "").trim();
   if (!trimmed) throw new Error("TEAM_NAME_REQUIRED");
   const existingArr = uniqTeams(existingNames);
-  const tl = trimmed.toLowerCase();
-  if (!existingArr.some((t) => t.toLowerCase() === tl)) {
+  if (!existingArr.includes(trimmed)) {
     throw new Error("TEAM_NOT_IN_CATALOG");
   }
+  const tl = trimmed.toLowerCase();
 
   if (viewer?.role === "mainTeamLead") {
     const allowed = new Set(getUserTeamsList(viewer).map((t) => t.toLowerCase()));

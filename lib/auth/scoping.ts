@@ -14,10 +14,23 @@ export type RecordLike = {
   clientName?: string;
 };
 
+function uniqCaseInsensitive(arr: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of arr) {
+    const t = String(raw ?? "").trim();
+    const key = t.toLowerCase();
+    if (!t || seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
+}
+
 export function getUserTeamsList(user: Partial<AppUser> = {}): string[] {
   const multi = Array.isArray(user?.teamNames) ? user.teamNames : [];
   const single = typeof user?.teamName === "string" ? [user.teamName] : [];
-  return [...new Set([...multi, ...single].map((t) => String(t).trim()).filter(Boolean))];
+  return uniqCaseInsensitive([...multi, ...single]);
 }
 
 export function viewerTeamLcSet(viewer: Partial<AppUser>): Set<string> {

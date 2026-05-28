@@ -154,7 +154,7 @@ export function matchesActiveRecordFilters(
     if (t == null || Math.floor(t / 60) !== Number(fHour)) return false;
   }
   if (analysts && String(r.analyst ?? "").trim() !== analysts) return false;
-  if (teams && String(r.team ?? "").trim() !== teams) return false;
+  if (teams && String(r.team ?? "").trim().toLowerCase() !== teams.toLowerCase()) return false;
   if (profiles && String(r.profile ?? "").trim() !== profiles) return false;
 
   const hasFirstReply = !!(String(r.firstReply ?? "").trim());
@@ -226,7 +226,12 @@ export function buildFilterOptions(
   }
 
   const mergedTeams = [
-    ...new Set([...records.map((r) => r.team).filter(Boolean), ...teamsCatalog]),
+    ...new Map(
+      [...records.map((r) => r.team), ...teamsCatalog]
+        .map((t) => String(t ?? "").trim())
+        .filter(Boolean)
+        .map((t) => [t.toLowerCase(), t] as const),
+    ).values(),
   ];
   let teams = mergedTeams;
   if (role === "analyst" || role === "mainTeamLead" || teamLeadRestricted) {

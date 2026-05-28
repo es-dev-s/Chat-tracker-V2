@@ -214,7 +214,14 @@ export default function AdminView() {
     try {
       await addTeam(teamName);
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Could not save team.");
+      const code = e instanceof Error ? e.message : String(e);
+      window.alert(
+        code === "TEAM_NAME_CONFLICT_CASE"
+          ? `A team named "${teamName}" already exists with different capitalization. Use the existing name or remove it first.`
+          : e instanceof Error
+            ? e.message
+            : "Could not save team.",
+      );
       return false;
     }
     setNewTeamName("");
@@ -239,16 +246,15 @@ export default function AdminView() {
 
   const removeTeamName = async (teamName: string): Promise<boolean> => {
     if (currentUser?.role !== "teamLead") return false;
-    const target = (teamName || "").trim().toLowerCase();
-    if (!target) return false;
+    const trimmed = (teamName || "").trim();
+    if (!trimmed) return false;
+    if (!teams.includes(trimmed)) return false;
     if (teamLeadRestricted && currentUser) {
       const leadTeams = new Set(getUserTeamsList(currentUser).map((t) => t.toLowerCase()));
-      if (!leadTeams.has(target)) return false;
+      if (!leadTeams.has(trimmed.toLowerCase())) return false;
     }
-    const canonical =
-      teams.find((t) => t.trim().toLowerCase() === target) || teamName.trim();
     try {
-      await deleteTeam(canonical);
+      await deleteTeam(trimmed);
       flash(setTeamSaved);
       return true;
     } catch (e) {

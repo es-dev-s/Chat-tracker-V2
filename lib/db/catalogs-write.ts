@@ -1,4 +1,7 @@
+import { readTeams } from "./catalogs";
 import { checkSupabaseResult, withSupabaseFailover } from "./supabase";
+import { readUsers } from "./users";
+import { deleteUserById, upsertTrackerUser } from "./users-write";
 
 async function readMaxTeamSortIndex(): Promise<number> {
   return withSupabaseFailover(async (sb) => {
@@ -31,6 +34,11 @@ async function readMaxProfileSortIndex(): Promise<number> {
 export async function insertTeamName(name: string): Promise<void> {
   const trimmed = String(name || "").trim();
   if (!trimmed) throw new Error("TEAM_NAME_REQUIRED");
+  const existing = await readTeams();
+  if (existing.includes(trimmed)) return;
+  if (existing.some((t) => t.trim().toLowerCase() === trimmed.toLowerCase())) {
+    throw new Error("TEAM_NAME_CONFLICT_CASE");
+  }
   const nextIndex = (await readMaxTeamSortIndex()) + 1;
   await withSupabaseFailover(async (sb) => {
     const res = await sb.from("tracker_teams").insert({ name: trimmed, sort_index: nextIndex });
@@ -50,12 +58,40 @@ export async function insertProfileName(name: string): Promise<void> {
   });
 }
 
+/**
+ * Remove one catalog team by exact name (case-sensitive).
+ * The legacy `remove_team_cascade` RPC matched case-insensitively and could
+ * delete "Victoria" and "victoria" together — this replaces that behavior.
+ */
 export async function removeTeamCascade(teamName: string): Promise<void> {
   const trimmed = String(teamName || "").trim();
   if (!trimmed) throw new Error("TEAM_NAME_REQUIRED");
+
+  const users = await readUsers();
+  const usersToDelete = users.filter((u) => String(u.teamName ?? "").trim() === trimmed);
+  const usersToPatch = users.filter((u) => {
+    if (String(u.teamName ?? "").trim() === trimmed) return false;
+    return (u.teamNames ?? []).some((t) => String(t).trim() === trimmed);
+  });
+
   await withSupabaseFailover(async (sb) => {
-    const res = await sb.rpc("remove_team_cascade", { p_team_name: trimmed });
-    checkSupabaseResult(res, "remove_team_cascade");
+    const delRecords = await sb.from("chat_records").delete().eq("team", trimmed);
+    checkSupabaseResult(delRecords, "delete chat_records for team");
+    return null;
+  });
+
+  for (const u of usersToPatch) {
+    const nextNames = (u.teamNames ?? []).filter((t) => String(t).trim() !== trimmed);
+    await upsertTrackerUser({ ...u, teamNames: nextNames });
+  }
+
+  for (const u of usersToDelete) {
+    await deleteUserById(u.id);
+  }
+
+  await withSupabaseFailover(async (sb) => {
+    const delTeam = await sb.from("tracker_teams").delete().eq("name", trimmed);
+    checkSupabaseResult(delTeam, "delete tracker_teams");
     return null;
   });
 }

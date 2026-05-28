@@ -1,8 +1,21 @@
 import { normEmail, readUsers, type AppUser } from "./users";
 import { checkSupabaseResult, withSupabaseFailover } from "./supabase";
 
+function uniqCaseInsensitive(arr: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of arr) {
+    const t = String(raw ?? "").trim();
+    const key = t.toLowerCase();
+    if (!t || seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
+}
+
 function appUserToDbRow(u: AppUser) {
-  const teamNames = Array.isArray(u.teamNames) ? u.teamNames : [];
+  const teamNames = uniqCaseInsensitive(Array.isArray(u.teamNames) ? u.teamNames : []);
   const profileNames = Array.isArray(u.profileNames) ? u.profileNames : [];
   return {
     user_id: String(u.id),

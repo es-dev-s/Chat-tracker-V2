@@ -18,8 +18,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "TEAM_NAME_REQUIRED" }, { status: 400 });
     }
     const existing = await readTeams();
-    if (existing.some((t) => String(t || "").trim().toLowerCase() === trimmed.toLowerCase())) {
+    if (existing.includes(trimmed)) {
       return NextResponse.json({ ok: true });
+    }
+    if (existing.some((t) => String(t || "").trim().toLowerCase() === trimmed.toLowerCase())) {
+      return NextResponse.json(
+        { error: "TEAM_NAME_CONFLICT_CASE" },
+        { status: 400 },
+      );
     }
     computeTeamCatalogAfterAdd(viewer, existing, trimmed);
     await insertTeamName(trimmed);

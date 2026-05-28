@@ -35,6 +35,7 @@ export function mapWriteError(err: unknown): NextResponse {
   }
   if (
     code === "TEAM_NAME_REQUIRED" ||
+    code === "TEAM_NAME_CONFLICT_CASE" ||
     code === "PROFILE_NAME_REQUIRED" ||
     code === "USER_EMAIL_CONFLICT" ||
     code === "USER_EMAIL_REQUIRED"
