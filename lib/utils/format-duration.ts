@@ -1,5 +1,3 @@
-import { diffEventMins } from "@/lib/utils/event-datetime";
-
 export function parseTime(t = ""): number | null {
   const p = String(t ?? "")
     .trim()
@@ -29,48 +27,24 @@ export function fmtMins(minutes: number | null | undefined): string {
 }
 
 export function replyDiffFromRecord(r: {
-  date?: string;
   firstReceive?: string;
   firstReply?: string;
-  firstReceiveDate?: string;
-  firstReplyDate?: string;
   replyDiff?: number | null;
 }): number | null {
-  const recordDate = String(r.date ?? "").trim();
-  const live = diffEventMins(
-    r.firstReceiveDate ?? "",
-    r.firstReceive ?? "",
-    r.firstReplyDate ?? "",
-    r.firstReply ?? "",
-    recordDate,
-  );
+  const live = diffMins(r.firstReceive ?? "", r.firstReply ?? "");
   if (live != null && Number.isFinite(live)) return live;
-  const sameDay = diffMins(r.firstReceive ?? "", r.firstReply ?? "");
-  if (sameDay != null && Number.isFinite(sameDay)) return sameDay;
   const stored = r.replyDiff;
   if (stored != null && Number.isFinite(Number(stored))) return Number(stored);
   return null;
 }
 
 export function totalConvFromRecord(r: {
-  date?: string;
   firstReceive?: string;
   analystLastReply?: string;
-  firstReceiveDate?: string;
-  analystLastReplyDate?: string;
   totalConv?: number | null;
 }): number | null {
-  const recordDate = String(r.date ?? "").trim();
-  const live = diffEventMins(
-    r.firstReceiveDate ?? "",
-    r.firstReceive ?? "",
-    r.analystLastReplyDate ?? "",
-    r.analystLastReply ?? "",
-    recordDate,
-  );
+  const live = diffMins(r.firstReceive ?? "", r.analystLastReply ?? "");
   if (live != null && Number.isFinite(live)) return live;
-  const sameDay = diffMins(r.firstReceive ?? "", r.analystLastReply ?? "");
-  if (sameDay != null && Number.isFinite(sameDay)) return sameDay;
   const stored = r.totalConv;
   if (stored != null && Number.isFinite(Number(stored))) return Number(stored);
   return null;

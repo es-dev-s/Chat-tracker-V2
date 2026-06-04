@@ -44,52 +44,13 @@ function diffMins(t1, t2) {
   return a != null && b != null ? b - a : null;
 }
 
-function resolveEventDate(eventDate, recordDate) {
-  const explicit = String(eventDate ?? "").trim();
-  if (explicit) return explicit;
-  return String(recordDate ?? "").trim();
-}
-
-function parseEventEpochMinutes(dateIso, timeStr) {
-  const date = resolveEventDate(dateIso, "");
-  const mins = parseTime(timeStr);
-  if (!date || mins == null) return null;
-  const parts = date.split("-").map(Number);
-  if (parts.length !== 3) return null;
-  const [y, m, d] = parts;
-  const dt = new Date(y, m - 1, d, 0, 0, 0, 0);
-  const wholeH = Math.floor(mins / 60);
-  const remM = mins % 60;
-  dt.setHours(wholeH, remM, 0);
-  return dt.getTime() / 60_000;
-}
-
-function diffEventMins(d1, t1, d2, t2, recordDate) {
-  const a = parseEventEpochMinutes(resolveEventDate(d1, recordDate), t1);
-  const b = parseEventEpochMinutes(resolveEventDate(d2, recordDate), t2);
-  if (a == null || b == null) return null;
-  return b - a;
-}
-
-function persistEventDate(eventDate, recordDate) {
-  const resolved = resolveEventDate(eventDate, recordDate);
-  const base = String(recordDate ?? "").trim();
-  if (!resolved || resolved === base) return null;
-  return resolved;
-}
-
 function buildChatRecordFromForm(form, user, useFirstReplyAsLast) {
   const nowIso = new Date().toISOString();
   const analystLastReply =
     !form.clientLastReply && useFirstReplyAsLast ? form.firstReply : form.analystLastReply;
-  const analystLastDate =
-    !form.clientLastReply && useFirstReplyAsLast
-      ? form.firstReplyDate
-      : form.analystLastReplyDate;
-  const recordDate = resolveEventDate(form.firstReceiveDate, form.date) || form.date;
   const noteTrim = (form.note || "").trim();
   return {
-    date: recordDate,
+    date: form.date,
     analyst: form.analyst,
     team: form.team,
     profile: String(form.profile || "").trim(),
@@ -100,27 +61,11 @@ function buildChatRecordFromForm(form, user, useFirstReplyAsLast) {
     firstReply: form.firstReply,
     clientLastReply: form.clientLastReply,
     analystLastReply,
-    firstReceiveDate: persistEventDate(form.firstReceiveDate, recordDate) ?? "",
-    firstReplyDate: persistEventDate(form.firstReplyDate, recordDate) ?? "",
-    clientLastReplyDate: persistEventDate(form.clientLastReplyDate, recordDate) ?? "",
-    analystLastReplyDate: persistEventDate(analystLastDate, recordDate) ?? "",
     received: form.received,
     attempted: form.attempted,
     resolved: form.resolved,
-    replyDiff: diffEventMins(
-      form.firstReceiveDate,
-      form.firstReceive,
-      form.firstReplyDate,
-      form.firstReply,
-      recordDate,
-    ),
-    totalConv: diffEventMins(
-      form.firstReceiveDate,
-      form.firstReceive,
-      analystLastDate,
-      analystLastReply,
-      recordDate,
-    ),
+    replyDiff: diffMins(form.firstReceive, form.firstReply),
+    totalConv: diffMins(form.firstReceive, analystLastReply),
     noteUpdatedAt: noteTrim ? nowIso : null,
     noteUpdatedBy: noteTrim ? user.email : null,
     leadNote: "",
@@ -163,10 +108,6 @@ function appRecordToDbRowForInsert(rec) {
     first_reply: rec.firstReply ?? "",
     client_last_reply: rec.clientLastReply ?? "",
     analyst_last_reply: rec.analystLastReply ?? "",
-    first_receive_date: rec.firstReceiveDate || null,
-    first_reply_date: rec.firstReplyDate || null,
-    client_last_reply_date: rec.clientLastReplyDate || null,
-    analyst_last_reply_date: rec.analystLastReplyDate || null,
     received: Number(rec.received ?? 1),
     attempted: Number(rec.attempted ?? 1),
     resolved: Number(rec.resolved ?? 1),
@@ -194,10 +135,6 @@ function dbRowToApp(row) {
     firstReply: String(row.first_reply ?? ""),
     clientLastReply: String(row.client_last_reply ?? ""),
     analystLastReply: String(row.analyst_last_reply ?? ""),
-    firstReceiveDate: String(row.first_receive_date ?? ""),
-    firstReplyDate: String(row.first_reply_date ?? ""),
-    clientLastReplyDate: String(row.client_last_reply_date ?? ""),
-    analystLastReplyDate: String(row.analyst_last_reply_date ?? ""),
     received: Number(row.received ?? 1),
     attempted: Number(row.attempted ?? 1),
     resolved: Number(row.resolved ?? 1),
@@ -317,36 +254,6 @@ const scenarios = [
     },
     useFirstReplyAsLast: false,
     expect: { received: 0, attempted: 0, resolved: 0 },
-  },
-  {
-    name: "cross-day — client today, analyst tomorrow",
-    form: {
-      date: "2026-06-04",
-      analyst: "Test Analyst",
-      team: "Team Alpha",
-      profile: "",
-      clientName: "",
-      phone: "",
-      note: "",
-      firstReceive: "18:00:00",
-      firstReply: "18:05:00",
-      clientLastReply: "20:00:00",
-      analystLastReply: "09:00:00",
-      firstReceiveDate: "2026-06-04",
-      firstReplyDate: "2026-06-04",
-      clientLastReplyDate: "2026-06-04",
-      analystLastReplyDate: "2026-06-05",
-      received: 1,
-      attempted: 1,
-      resolved: 1,
-    },
-    useFirstReplyAsLast: false,
-    expect: {
-      replyDiff: 5,
-      totalConv: 15 * 60 + 0,
-      firstReplyDate: "",
-      analystLastReplyDate: "2026-06-05",
-    },
   },
 ];
 
