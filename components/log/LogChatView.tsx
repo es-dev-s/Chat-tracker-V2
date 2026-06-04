@@ -6,15 +6,17 @@ import { BusyLabel } from "@/components/ui/BusySpinner";
 import { postChatRecord } from "@/lib/api/mutations";
 import {
   buildChatRecordFromForm,
-  emptyLogForm,
+  cascadeRecordDateChange,
+  computeReplyDiffMins,
+  computeTotalConvMins,
   isValidRecordTime,
+  newLogFormWithToday,
   outcomesRespectOrdering,
-  todayIso,
   getLogChatTimeFieldErrors,
   validateRecordTimeOrdering,
   type LogFormState,
 } from "@/lib/records/form-utils";
-import { diffMins, fmtMins } from "@/lib/utils/format-duration";
+import { fmtMins } from "@/lib/utils/format-duration";
 import { makeDisplayName } from "@/lib/utils/display-name";
 import { getUserTeamsList } from "@/lib/auth/scoping";
 import {
@@ -27,16 +29,8 @@ import { useAuthStore } from "@/store/auth-store";
 import CtCheckbox from "@/components/ui/CtCheckbox";
 import CtDateInput from "@/components/ui/CtDateInput";
 import CtSelect from "@/components/ui/CtSelect";
-import LogTimePicker from "@/components/log/LogTimePicker";
-import LogTimeFieldHint from "@/components/log/LogTimeFieldHint";
+import LogTimeFieldRow, { LOG_TIME_FIELD_CONFIGS } from "@/components/log/LogTimeFieldRow";
 import LogOutcomeField, { type OutcomeKey } from "@/components/log/LogOutcomeField";
-
-const TIME_FIELDS = [
-  { label: "1st Chat Receive", key: "firstReceive" as const, required: true },
-  { label: "1st Reply", key: "firstReply" as const, required: false },
-  { label: "Client Last Reply", key: "clientLastReply" as const, required: false },
-  { label: "Analyst Last Reply", key: "analystLastReply" as const, required: false },
-];
 
 const OUTCOME_FIELDS = [
   { label: "Chat Received", key: "received" as const },
@@ -46,10 +40,7 @@ const OUTCOME_FIELDS = [
 
 export default function LogChatView() {
   const user = useAuthStore((s) => s.user);
-  const [form, setForm] = useState<LogFormState>(() => ({
-    ...emptyLogForm(),
-    date: todayIso(),
-  }));
+  const [form, setForm] = useState<LogFormState>(() => newLogFormWithToday());
   const [useFirstReplyAsLast, setUseFirstReplyAsLast] = useState(false);
   const [saved, setSaved] = useState(false);
   const [formError, setFormError] = useState("");
@@ -93,8 +84,16 @@ export default function LogChatView() {
 
   const previewAnalystLast =
     !form.clientLastReply && useFirstReplyAsLast ? form.firstReply : form.analystLastReply;
-  const previewReplyDiff = diffMins(form.firstReceive, form.firstReply);
-  const previewTotalConv = diffMins(form.firstReceive, previewAnalystLast);
+  const previewAnalystLastDate =
+    !form.clientLastReply && useFirstReplyAsLast
+      ? form.firstReplyDate
+      : form.analystLastReplyDate;
+  const previewReplyDiff = computeReplyDiffMins(form);
+  const previewTotalConv = computeTotalConvMins(
+    form,
+    previewAnalystLast,
+    previewAnalystLastDate,
+  );
 
   const timeFieldErrors = useMemo(
     () => getLogChatTimeFieldErrors(form, useFirstReplyAsLast),
@@ -116,7 +115,7 @@ export default function LogChatView() {
       user?.role === "analyst" && currentUserTeams.length === 1
         ? currentUserTeams[0] || ""
         : "";
-    setForm({ ...emptyLogForm(), date: todayIso(), team: defaultTeam });
+    setForm({ ...newLogFormWithToday(defaultTeam) });
     setUseFirstReplyAsLast(false);
     setFormError("");
     setFormEpoch((n) => n + 1);
@@ -164,12 +163,7 @@ export default function LogChatView() {
       setFormError("Chat outcomes must follow Received >= Attempted >= Resolved (0 or 1).");
       return;
     }
-    const timeOrder = validateRecordTimeOrdering({
-      firstReceive: normalizedForm.firstReceive,
-      firstReply: normalizedForm.firstReply,
-      clientLastReply: normalizedForm.clientLastReply,
-      analystLastReply: normalizedForm.analystLastReply,
-    });
+    const timeOrder = validateRecordTimeOrdering(normalizedForm);
     if (!timeOrder.ok) {
       setFormError(timeOrder.message || "Invalid time ordering.");
       return;
@@ -232,7 +226,7 @@ export default function LogChatView() {
             <CtDateInput
               key={form.date || "__empty__"}
               value={form.date || ""}
-              onChange={(v) => setF("date", v)}
+              onChange={(v) => setForm((prev) => cascadeRecordDateChange(prev, v))}
             />
           </div>
           <div style={{ minWidth: 0 }}>
@@ -360,48 +354,44 @@ export default function LogChatView() {
               Time Tracking
             </h3>
             <p className="ct-log-time-panel__hint">
-              Enter times in 12-hour format with AM/PM (auto-detected when omitted) or 24-hour.
-              Window supports full-day entry (including Saturday 7:00 AM to 3:00 PM). You can log
-              only <strong>1st Chat Receive</strong> and leave reply fields blank until someone
-              responds — those chats appear as{" "}
+              Use the <strong>calendar icon</strong> on each row when a reply happened on a
+              different day than receive (e.g. client replied today, you reply tomorrow). Times use
+              12-hour AM/PM pickers. You can log only <strong>1st Chat Receive</strong> and leave
+              reply fields blank until someone responds — those appear as{" "}
               <span className="ct-log-time-panel__awaiting">Awaiting reply</span> on Records and
               in the Reply tracking filter on the dashboard.
             </p>
           </header>
 
           <div className="ct-log-time-board">
-            {TIME_FIELDS.map(({ label, key, required }) => {
-              const fieldError = timeFieldErrors[key];
+            {LOG_TIME_FIELD_CONFIGS.map((config) => {
+              const fieldError = timeFieldErrors[config.timeKey];
+              const dateKey = config.dateKey;
+              const timeKey = config.timeKey;
               return (
-                <div
-                  key={key}
-                  className={`ct-log-time-field${fieldError ? " ct-log-time-field--invalid" : ""}`}
-                >
-                  <label
-                    className={`ct-log-time-field__label${required ? " ct-log-time-field__label--required" : ""}`}
-                    htmlFor={`log-time-${key}`}
-                  >
-                    {label}
-                  </label>
-                  <LogTimePicker
-                    key={`${key}-${formEpoch}`}
-                    id={`log-time-${key}`}
-                    aria-label={label}
-                    value={form[key] || ""}
-                    onChange={(v) => setF(key, v)}
-                    allowClear={!required}
-                    invalid={!!fieldError}
-                    aria-describedby={fieldError ? `log-time-${key}-hint` : undefined}
-                  />
-                  <div className="ct-log-time-field__hint-layer" aria-hidden={!fieldError}>
-                    {fieldError ? (
-                      <LogTimeFieldHint
-                        error={fieldError}
-                        id={`log-time-${key}-hint`}
-                      />
-                    ) : null}
-                  </div>
-                </div>
+                <LogTimeFieldRow
+                  key={timeKey}
+                  config={config}
+                  idPrefix="log"
+                  recordDate={form.date}
+                  dateValue={form[dateKey]}
+                  timeValue={form[timeKey]}
+                  onDateChange={(v) => {
+                    setForm((prev) => {
+                      const next = { ...prev, [dateKey]: v };
+                      if (timeKey === "firstReceive") {
+                        return cascadeRecordDateChange(
+                          { ...next, date: v },
+                          v,
+                        );
+                      }
+                      return next;
+                    });
+                  }}
+                  onTimeChange={(v) => setF(timeKey, v)}
+                  fieldError={fieldError}
+                  formEpoch={formEpoch}
+                />
               );
             })}
           </div>

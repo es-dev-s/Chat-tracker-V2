@@ -5364,6 +5364,33 @@ button:disabled {
   color: var(--ct-red);
 }
 
+.ct-log-time-field__controls {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.ct-log-time-field__date {
+  flex: 0 0 108px;
+  min-width: 0;
+}
+
+.ct-log-time-field__time {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ct-date-input--icon-trigger .ct-date-input__icon-label {
+  line-height: 1;
+  color: var(--ct-text);
+  font-family: var(--font-sans, system-ui, sans-serif);
+}
+
+.ct-log-time-field:has(.ct-date-input--open) {
+  z-index: 14;
+}
+
 .ct-log-time-picker {
   position: relative;
   min-width: 0;

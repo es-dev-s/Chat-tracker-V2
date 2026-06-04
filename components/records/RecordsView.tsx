@@ -5,12 +5,17 @@ import { C, RAD, SANS, TYPE } from "@/lib/design/tokens";
 import { teamColorFor } from "@/lib/design/colors";
 import { deleteChatRecord, patchChatRecord } from "@/lib/api/mutations";
 import {
+  buildChatRecordFromForm,
+  cascadeRecordDateChange,
+  computeReplyDiffMins,
+  computeTotalConvMins,
   getLogChatTimeFieldErrors,
   isValidRecordTime,
+  logFormFromChatRecord,
   outcomesRespectOrdering,
   validateRecordTimeOrdering,
 } from "@/lib/records/form-utils";
-import { diffMins, fmtMins, replyDiffFromRecord, totalConvFromRecord } from "@/lib/utils/format-duration";
+import { fmtMins, replyDiffFromRecord, totalConvFromRecord } from "@/lib/utils/format-duration";
 import { formatStoredTimeDisplay } from "@/lib/utils/time-input";
 import { badgeStyle, btnStyle, cardStyle, inputStyle } from "@/lib/styles/controls";
 import { BusyLabel } from "@/components/ui/BusySpinner";
@@ -27,18 +32,10 @@ import RecordsPaginationBar from "@/components/records/RecordsPaginationBar";
 import { RecordsTableSkeleton } from "@/components/ui/WorkspaceSkeletons";
 import CtCheckbox from "@/components/ui/CtCheckbox";
 import CtDateInput from "@/components/ui/CtDateInput";
-import LogTimePicker from "@/components/log/LogTimePicker";
-import LogTimeFieldHint from "@/components/log/LogTimeFieldHint";
+import LogTimeFieldRow, { LOG_TIME_FIELD_CONFIGS } from "@/components/log/LogTimeFieldRow";
 import { useRecordsEditScroll } from "@/hooks/useRecordsEditScroll";
 
 const PAGE_SIZE = 25;
-
-const EDIT_TIME_FIELDS = [
-  { label: "1st Chat Receive", key: "firstReceive" as const, required: true },
-  { label: "1st Reply", key: "firstReply" as const, required: false },
-  { label: "Client Last Reply", key: "clientLastReply" as const, required: false },
-  { label: "Analyst Last Reply", key: "analystLastReply" as const, required: false },
-];
 
 function StatusBadge({ record }: { record: Partial<ChatRecord> }) {
   const hasAnalystLast = !!(String(record.analystLastReply ?? "").trim());
@@ -164,11 +161,13 @@ export default function RecordsView() {
     editForm && !editForm.clientLastReply && editUseFirstReplyAsLast
       ? editForm.firstReply
       : editForm?.analystLastReply ?? "";
-  const editPreviewReplyDiff = editForm
-    ? diffMins(editForm.firstReceive, editForm.firstReply)
-    : null;
+  const editPreviewAnalystLastDate =
+    editForm && !editForm.clientLastReply && editUseFirstReplyAsLast
+      ? editForm.firstReplyDate
+      : editForm?.analystLastReplyDate ?? "";
+  const editPreviewReplyDiff = editForm ? computeReplyDiffMins(editForm) : null;
   const editPreviewTotalConv = editForm
-    ? diffMins(editForm.firstReceive, editPreviewAnalystLast)
+    ? computeTotalConvMins(editForm, editPreviewAnalystLast, editPreviewAnalystLastDate)
     : null;
 
   const editTimeFieldErrors = useMemo(
@@ -190,7 +189,7 @@ export default function RecordsView() {
     scrollAnchorRef.current = record.id;
     notifyEditOpened();
     setEditId(record.id);
-    setEditForm({ ...record });
+    setEditForm({ ...record, ...logFormFromChatRecord(record) });
     setEditUseFirstReplyAsLast(false);
     setEditError("");
     setEditFormEpoch((n) => n + 1);
@@ -224,12 +223,7 @@ export default function RecordsView() {
       setEditError("Chat outcomes must follow Received >= Attempted >= Resolved (0 or 1).");
       return;
     }
-    const timeOrder = validateRecordTimeOrdering({
-      firstReceive: normalizedEditForm.firstReceive,
-      firstReply: normalizedEditForm.firstReply,
-      clientLastReply: normalizedEditForm.clientLastReply,
-      analystLastReply: normalizedEditForm.analystLastReply,
-    });
+    const timeOrder = validateRecordTimeOrdering(normalizedEditForm);
     if (!timeOrder.ok) {
       setEditError(timeOrder.message || "Invalid time ordering.");
       return;
@@ -252,10 +246,15 @@ export default function RecordsView() {
     }
 
     const noteChanged = (existing.note || "") !== (normalizedEditForm.note || "");
+    const built = buildChatRecordFromForm(
+      logFormFromChatRecord(normalizedEditForm),
+      user,
+      editUseFirstReplyAsLast,
+    );
     const updatedRecord: ChatRecord = {
       ...normalizedEditForm,
-      replyDiff: diffMins(normalizedEditForm.firstReceive, normalizedEditForm.firstReply),
-      totalConv: diffMins(normalizedEditForm.firstReceive, normalizedEditForm.analystLastReply),
+      ...built,
+      id: editId,
       noteUpdatedAt:
         noteChanged && (normalizedEditForm.note || "").trim()
           ? new Date().toISOString()
@@ -382,7 +381,16 @@ export default function RecordsView() {
               <CtDateInput
                 key={editForm.date || "__empty__"}
                 value={editForm.date || ""}
-                onChange={(v) => setEditF("date", v)}
+                onChange={(v) =>
+                  setEditForm((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          ...cascadeRecordDateChange(logFormFromChatRecord(prev), v),
+                        }
+                      : prev,
+                  )
+                }
               />
               <input
                 style={inputStyle()}
@@ -415,45 +423,43 @@ export default function RecordsView() {
                   Time tracking
                 </h3>
                 <p className="ct-log-time-panel__hint">
-                  Pick hour, minute, and AM/PM for each field. Leave reply times blank until known.
+                  Use the calendar icon when a reply was on a different day. Pick hour, minute, and
+                  AM/PM for each field. Leave reply times blank until known.
                 </p>
               </header>
 
               <div className="ct-log-time-board">
-                {EDIT_TIME_FIELDS.map(({ label, key, required }) => {
-                  const fieldError = editTimeFieldErrors[key];
+                {LOG_TIME_FIELD_CONFIGS.map((config) => {
+                  const fieldError = editTimeFieldErrors[config.timeKey];
+                  const dateKey = config.dateKey;
+                  const timeKey = config.timeKey;
                   return (
-                    <div
-                      key={key}
-                      className={`ct-log-time-field${fieldError ? " ct-log-time-field--invalid" : ""}`}
-                    >
-                      <label
-                        className={`ct-log-time-field__label${required ? " ct-log-time-field__label--required" : ""}`}
-                        htmlFor={`records-edit-time-${key}`}
-                      >
-                        {label}
-                      </label>
-                      <LogTimePicker
-                        key={`${key}-${editFormEpoch}`}
-                        id={`records-edit-time-${key}`}
-                        aria-label={label}
-                        value={editForm[key] || ""}
-                        onChange={(v) => setEditF(key, v)}
-                        allowClear={!required}
-                        invalid={!!fieldError}
-                        aria-describedby={
-                          fieldError ? `records-edit-time-${key}-hint` : undefined
-                        }
-                      />
-                      <div className="ct-log-time-field__hint-layer" aria-hidden={!fieldError}>
-                        {fieldError ? (
-                          <LogTimeFieldHint
-                            error={fieldError}
-                            id={`records-edit-time-${key}-hint`}
-                          />
-                        ) : null}
-                      </div>
-                    </div>
+                    <LogTimeFieldRow
+                      key={timeKey}
+                      config={config}
+                      idPrefix="records-edit"
+                      recordDate={editForm.date}
+                      dateValue={editForm[dateKey]}
+                      timeValue={editForm[timeKey]}
+                      onDateChange={(v) => {
+                        setEditForm((prev) => {
+                          if (!prev) return prev;
+                          const base = logFormFromChatRecord(prev);
+                          const next = { ...prev, ...base, [dateKey]: v };
+                          if (timeKey === "firstReceive") {
+                            const cascaded = cascadeRecordDateChange(
+                              { ...base, ...next, date: v },
+                              v,
+                            );
+                            return { ...next, ...cascaded };
+                          }
+                          return next;
+                        });
+                      }}
+                      onTimeChange={(v) => setEditF(timeKey, v)}
+                      fieldError={fieldError}
+                      formEpoch={editFormEpoch}
+                    />
                   );
                 })}
               </div>

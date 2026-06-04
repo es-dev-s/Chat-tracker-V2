@@ -20,6 +20,11 @@ export type ChatRecord = {
   firstReply: string;
   clientLastReply: string;
   analystLastReply: string;
+  /** Per-event calendar date; empty = use `date` column */
+  firstReceiveDate: string;
+  firstReplyDate: string;
+  clientLastReplyDate: string;
+  analystLastReplyDate: string;
   received: number;
   attempted: number;
   resolved: number;
@@ -50,6 +55,10 @@ function dbChatRowToApp(row: Record<string, unknown>): ChatRecord | null {
     firstReply: String(row.first_reply ?? ""),
     clientLastReply: String(row.client_last_reply ?? ""),
     analystLastReply: String(row.analyst_last_reply ?? ""),
+    firstReceiveDate: String(row.first_receive_date ?? ""),
+    firstReplyDate: String(row.first_reply_date ?? ""),
+    clientLastReplyDate: String(row.client_last_reply_date ?? ""),
+    analystLastReplyDate: String(row.analyst_last_reply_date ?? ""),
     received: Number(row.received ?? 1),
     attempted: Number(row.attempted ?? 1),
     resolved: Number(row.resolved ?? 1),

@@ -1,3 +1,5 @@
+import { parseEventEpochMinutes, resolveEventDate } from "@/lib/utils/event-datetime";
+
 export function parseOutcomeFlag(
   value: unknown,
   fallback: number,
@@ -27,30 +29,31 @@ export function withValidatedRecordOutcomes<T extends Record<string, unknown>>(
   return { ...record, received, attempted, resolved };
 }
 
-function parseClockMinutes(value: unknown): number | null {
-  const raw = String(value ?? "").trim();
-  if (!raw) return null;
-  const parts = raw.split(":");
-  if (parts.length < 2 || parts.length > 3) return null;
-  const nums = parts.map((p) => Number(p));
-  if (nums.some((n) => !Number.isFinite(n))) return null;
-  const [h, m, s = 0] = nums;
-  if (h < 0 || m < 0 || m >= 60 || s < 0 || s >= 60) return null;
-  return h * 60 + m + s / 60;
+function eventEpoch(
+  record: Record<string, unknown>,
+  timeKey: string,
+  dateKey: string,
+): number | null {
+  const time = String(record[timeKey] ?? "").trim();
+  if (!time) return null;
+  const recordDate = String(record.date ?? "").trim();
+  const dateIso = resolveEventDate(String(record[dateKey] ?? ""), recordDate);
+  return parseEventEpochMinutes(dateIso, time);
 }
 
 export function validateRecordTimeOrder(record: Record<string, unknown>): void {
-  const firstReceive = parseClockMinutes(record?.firstReceive);
-  const firstReply = parseClockMinutes(record?.firstReply);
-  const clientLast = parseClockMinutes(record?.clientLastReply);
-  const analystLast = parseClockMinutes(record?.analystLastReply);
-  if (firstReceive != null && firstReply != null && firstReply < firstReceive) {
+  const receive = eventEpoch(record, "firstReceive", "firstReceiveDate");
+  const firstReply = eventEpoch(record, "firstReply", "firstReplyDate");
+  const clientLast = eventEpoch(record, "clientLastReply", "clientLastReplyDate");
+  const analystLast = eventEpoch(record, "analystLastReply", "analystLastReplyDate");
+
+  if (receive != null && firstReply != null && firstReply < receive) {
     throw new Error("TIME_ORDER_INVALID_FIRST_REPLY");
   }
-  if (firstReceive != null && clientLast != null && clientLast < firstReceive) {
+  if (receive != null && clientLast != null && clientLast < receive) {
     throw new Error("TIME_ORDER_INVALID_CLIENT_LAST_REPLY");
   }
-  if (firstReceive != null && analystLast != null && analystLast < firstReceive) {
+  if (receive != null && analystLast != null && analystLast < receive) {
     throw new Error("TIME_ORDER_INVALID_ANALYST_LAST");
   }
   if (firstReply != null && analystLast != null && analystLast < firstReply) {

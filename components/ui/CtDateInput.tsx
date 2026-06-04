@@ -74,11 +74,20 @@ function computePopoverCoords(
   return { top, left, width, placement };
 }
 
+function formatIconTriggerDate(iso: string): string {
+  const p = parseIsoDateParts(iso);
+  if (!p) return "Pick date";
+  const dt = new Date(p.y, p.m, p.d);
+  return dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 type CtDateInputProps = {
   value: string;
   onChange: (value: string) => void;
   inputStyleFn?: (extra?: CSSProperties) => CSSProperties;
   compact?: boolean;
+  /** Calendar icon button only (for inline time-tracking rows). */
+  iconTriggerOnly?: boolean;
   id?: string;
   "aria-label"?: string;
 };
@@ -89,6 +98,7 @@ export default function CtDateInput({
   onChange,
   inputStyleFn = inputStyle,
   compact = false,
+  iconTriggerOnly = false,
   id: idProp,
   "aria-label": ariaLabel = "Date",
 }: CtDateInputProps) {
@@ -299,11 +309,34 @@ export default function CtDateInput({
       </div>
     ) : null;
 
+  const iconBtnStyle: CSSProperties = iconTriggerOnly
+    ? {
+        width: "100%",
+        minHeight: 42,
+        padding: "0 10px",
+        borderRadius: RAD.sm,
+        border: `1px solid ${open ? "rgba(37,99,235,0.45)" : C.border}`,
+        background: open ? "rgba(37,99,235,0.08)" : C.surface,
+        color: C.accent,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        cursor: "pointer",
+        fontSize: 12,
+        fontWeight: 600,
+        fontVariantNumeric: "tabular-nums",
+      }
+    : calendarBtnStyle;
+
+  const displayLabel = formatIconTriggerDate(value || draft);
+
   return (
     <div
       ref={rootRef}
       className={[
         compact ? "ct-date-input ct-date-input--compact" : "ct-date-input",
+        iconTriggerOnly ? "ct-date-input--icon-trigger" : "",
         open ? "ct-date-input--open" : "",
       ]
         .filter(Boolean)
@@ -314,38 +347,51 @@ export default function CtDateInput({
         ref={triggerRef}
         className="ct-date-input__trigger"
         style={
-          compact
-            ? { position: "relative", width: "100%" }
-            : { display: "flex", gap: 6, alignItems: "center" }
+          iconTriggerOnly
+            ? { width: "100%" }
+            : compact
+              ? { position: "relative", width: "100%" }
+              : { display: "flex", gap: 6, alignItems: "center" }
         }
       >
-        <input
-          id={inputId}
-          aria-label={ariaLabel}
-          aria-expanded={open}
-          aria-haspopup="dialog"
-          className={compact ? "ct-input ct-date-input__field" : undefined}
-          style={{ ...baseInput, flex: 1, minWidth: compact ? 0 : 120, width: "100%" }}
-          value={draft}
-          placeholder="YYYY-MM-DD"
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commitDraft}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              commitDraft();
-            }
-            if (e.key === "Escape") setOpen(false);
-          }}
-        />
+        {!iconTriggerOnly ? (
+          <input
+            id={inputId}
+            aria-label={ariaLabel}
+            aria-expanded={open}
+            aria-haspopup="dialog"
+            className={compact ? "ct-input ct-date-input__field" : undefined}
+            style={{ ...baseInput, flex: 1, minWidth: compact ? 0 : 120, width: "100%" }}
+            value={draft}
+            placeholder="YYYY-MM-DD"
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commitDraft}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitDraft();
+              }
+              if (e.key === "Escape") setOpen(false);
+            }}
+          />
+        ) : null}
         <button
           type="button"
-          aria-label="Open calendar"
+          id={iconTriggerOnly ? inputId : undefined}
+          aria-label={
+            iconTriggerOnly
+              ? `${ariaLabel}, ${displayLabel}. Open calendar`
+              : "Open calendar"
+          }
           aria-expanded={open}
+          aria-haspopup="dialog"
           onClick={() => setOpen((o) => !o)}
-          style={calendarBtnStyle}
+          style={iconBtnStyle}
         >
-          <Calendar size={compact ? 14 : 18} strokeWidth={2} aria-hidden />
+          <Calendar size={compact || iconTriggerOnly ? 14 : 18} strokeWidth={2} aria-hidden />
+          {iconTriggerOnly ? (
+            <span className="ct-date-input__icon-label">{displayLabel}</span>
+          ) : null}
         </button>
       </div>
       {mounted && calendarPopover
