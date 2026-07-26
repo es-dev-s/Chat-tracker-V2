@@ -20,6 +20,10 @@ export type ChatRecord = {
   firstReply: string;
   clientLastReply: string;
   analystLastReply: string;
+  /** Storage path in chat-screenshots bucket (empty when none). */
+  firstChatScreenshot: string;
+  /** Storage path in chat-screenshots bucket (empty when none). */
+  lastChatScreenshot: string;
   received: number;
   attempted: number;
   resolved: number;
@@ -50,6 +54,8 @@ function dbChatRowToApp(row: Record<string, unknown>): ChatRecord | null {
     firstReply: String(row.first_reply ?? ""),
     clientLastReply: String(row.client_last_reply ?? ""),
     analystLastReply: String(row.analyst_last_reply ?? ""),
+    firstChatScreenshot: String(row.first_chat_screenshot ?? ""),
+    lastChatScreenshot: String(row.last_chat_screenshot ?? ""),
     received: Number(row.received ?? 1),
     attempted: Number(row.attempted ?? 1),
     resolved: Number(row.resolved ?? 1),

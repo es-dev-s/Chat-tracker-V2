@@ -126,6 +126,8 @@ export default function LeadNotesView() {
           firstReply: "",
           clientLastReply: "",
           analystLastReply: "",
+          firstChatScreenshot: "",
+          lastChatScreenshot: "",
           received: 0,
           attempted: 0,
           resolved: 0,

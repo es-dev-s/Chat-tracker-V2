@@ -29,6 +29,9 @@ import CtCheckbox from "@/components/ui/CtCheckbox";
 import CtDateInput from "@/components/ui/CtDateInput";
 import LogTimePicker from "@/components/log/LogTimePicker";
 import LogTimeFieldHint from "@/components/log/LogTimeFieldHint";
+import ChatScreenshotField from "@/components/records/ChatScreenshotField";
+import ChatScreenshotThumb from "@/components/records/ChatScreenshotThumb";
+import RecordDetailModal from "@/components/records/RecordDetailModal";
 import { useRecordsEditScroll } from "@/hooks/useRecordsEditScroll";
 
 const PAGE_SIZE = 25;
@@ -70,10 +73,12 @@ const LEDGER_HEADERS: { label: string; className?: string }[] = [
   { label: "Client name", className: "ct-records-table__col-client" },
   { label: "Phone", className: "ct-records-table__col-phone" },
   { label: "1st Receive", className: "ct-records-table__col-time" },
+  { label: "1st Shot", className: "ct-records-table__col-shot" },
   { label: "1st Reply", className: "ct-records-table__col-time" },
   { label: "Reply diff", className: "ct-records-table__col-metric" },
   { label: "Client last", className: "ct-records-table__col-time" },
   { label: "Analyst last", className: "ct-records-table__col-time" },
+  { label: "Last Shot", className: "ct-records-table__col-shot" },
   { label: "Total conv", className: "ct-records-table__col-metric" },
   { label: "Status", className: "ct-records-table__col-status" },
   { label: "R / A / S", className: "ct-records-table__col-ras" },
@@ -106,6 +111,7 @@ export default function RecordsView() {
   const [deleteTarget, setDeleteTarget] = useState<ChatRecord | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [detailId, setDetailId] = useState<number | null>(null);
   const scrollAnchorRef = useRef<number | null>(null);
 
   const role = user?.role ?? "analyst";
@@ -113,6 +119,11 @@ export default function RecordsView() {
   const canUpdateRecords = role === "teamLead" || role === "analyst";
 
   const filtered = useFilteredRecords(records);
+
+  const detailRecord = useMemo(
+    () => (detailId == null ? null : records.find((r) => r.id === detailId) || null),
+    [detailId, records],
+  );
 
   const sorted = useMemo(
     () => [...filtered].sort((a, b) => b.date.localeCompare(a.date)),
@@ -186,7 +197,16 @@ export default function RecordsView() {
     if (editError) setEditError("");
   };
 
+  const openDetail = (record: ChatRecord) => {
+    setDetailId(record.id);
+  };
+
+  const closeDetail = () => {
+    setDetailId(null);
+  };
+
   const openEdit = (record: ChatRecord) => {
+    setDetailId(null);
     scrollAnchorRef.current = record.id;
     notifyEditOpened();
     setEditId(record.id);
@@ -297,6 +317,7 @@ export default function RecordsView() {
     try {
       await deleteChatRecord(deleteTarget.id);
       if (editId === deleteTarget.id) cancelEdit();
+      if (detailId === deleteTarget.id) closeDetail();
       setDeleteTarget(null);
     } catch (e) {
       setDeleteError(e instanceof Error ? e.message : "Could not delete record.");
@@ -489,6 +510,36 @@ export default function RecordsView() {
                 )}
               </div>
             </section>
+            <section
+              className="ct-log-shot-panel"
+              aria-labelledby="records-edit-shot-heading"
+              style={{ marginBottom: 14 }}
+            >
+              <header className="ct-log-shot-panel__head">
+                <h3 id="records-edit-shot-heading" className="ct-log-shot-panel__title">
+                  Chat screenshots
+                </h3>
+                <p className="ct-log-shot-panel__hint">
+                  Same fields as Log Chat. Visible to anyone who can see this ledger row.
+                </p>
+              </header>
+              <div className="ct-log-shot-board">
+                <ChatScreenshotField
+                  id="records-edit-shot-first"
+                  label="1st Chat Screenshot"
+                  kind="first"
+                  value={editForm.firstChatScreenshot || ""}
+                  onChange={(path) => setEditF("firstChatScreenshot", path)}
+                />
+                <ChatScreenshotField
+                  id="records-edit-shot-last"
+                  label="Last Chat Screenshot"
+                  kind="last"
+                  value={editForm.lastChatScreenshot || ""}
+                  onChange={(path) => setEditF("lastChatScreenshot", path)}
+                />
+              </div>
+            </section>
             <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
               <button
                 type="button"
@@ -523,7 +574,7 @@ export default function RecordsView() {
                 {filtered.length.toLocaleString()} records
               </span>
               <span className="ct-records-ledger__hint">
-                Scroll horizontally on smaller screens
+                Click a row for details · scroll horizontally on smaller screens
               </span>
             </div>
           </div>
@@ -552,7 +603,7 @@ export default function RecordsView() {
             <tbody>
               {pageRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={15} className="ct-records-table__empty">
+                  <td colSpan={17} className="ct-records-table__empty">
                     <div style={{ ...TYPE.caption, fontWeight: 500 }}>
                       No records match the current filters.
                     </div>
@@ -566,12 +617,20 @@ export default function RecordsView() {
                   <tr
                     key={r.id}
                     id={`ct-record-row-${r.id}`}
-                    className={
-                      highlightRecordId === r.id ? "ct-records-table__row--highlight" : undefined
-                    }
+                    className={[
+                      "ct-records-table__row--clickable",
+                      highlightRecordId === r.id ? "ct-records-table__row--highlight" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    onClick={() => openDetail(r)}
                   >
                     <td className="ct-records-table__col-date">{r.date}</td>
-                    <td className="ct-records-table__col-analyst">
+                    <td
+                      className="ct-records-table__col-analyst"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
                       <RecordAnalystPeekCell analyst={r.analyst || ""} users={users} />
                     </td>
                     <td>
@@ -589,6 +648,16 @@ export default function RecordsView() {
                     <td className="ct-records-table__col-time">
                       {formatStoredTimeDisplay(r.firstReceive) || "—"}
                     </td>
+                    <td
+                      className="ct-records-table__col-shot"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
+                      <ChatScreenshotThumb
+                        path={r.firstChatScreenshot}
+                        label="1st Chat Screenshot"
+                      />
+                    </td>
                     <td className="ct-records-table__col-time">
                       {formatStoredTimeDisplay(r.firstReply) || "—"}
                     </td>
@@ -600,6 +669,16 @@ export default function RecordsView() {
                     </td>
                     <td className="ct-records-table__col-time">
                       {formatStoredTimeDisplay(r.analystLastReply) || "—"}
+                    </td>
+                    <td
+                      className="ct-records-table__col-shot"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
+                      <ChatScreenshotThumb
+                        path={r.lastChatScreenshot}
+                        label="Last Chat Screenshot"
+                      />
                     </td>
                     <td className="ct-records-table__col-metric ct-records-table__metric-warn">
                       {fmtMins(totalConvFromRecord(r))}
@@ -614,7 +693,11 @@ export default function RecordsView() {
                       <span className="ct-records-table__ras-sep"> / </span>
                       <span>{r.resolved}</span>
                     </td>
-                    <td className="ct-records-table__col-actions">
+                    <td
+                      className="ct-records-table__col-actions"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
                       {canUpdateRecords || canDeleteRecords ? (
                         <div className="ct-records-table__actions">
                           {canUpdateRecords ? (
@@ -646,6 +729,14 @@ export default function RecordsView() {
           </table>
         </div>
       </section>
+
+      <RecordDetailModal
+        open={Boolean(detailRecord)}
+        record={detailRecord}
+        onClose={closeDetail}
+        canUpdate={canUpdateRecords}
+        onUpdate={openEdit}
+      />
 
       <ConfirmDialog
         open={Boolean(deleteTarget)}

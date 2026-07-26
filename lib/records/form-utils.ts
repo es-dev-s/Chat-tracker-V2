@@ -15,6 +15,8 @@ export type LogFormState = {
   firstReply: string;
   clientLastReply: string;
   analystLastReply: string;
+  firstChatScreenshot: string;
+  lastChatScreenshot: string;
   received: number;
   attempted: number;
   resolved: number;
@@ -33,6 +35,8 @@ export function emptyLogForm(): LogFormState {
     firstReply: "",
     clientLastReply: "",
     analystLastReply: "",
+    firstChatScreenshot: "",
+    lastChatScreenshot: "",
     received: 1,
     attempted: 1,
     resolved: 1,
@@ -273,6 +277,8 @@ export function buildChatRecordFromForm(
     firstReply: form.firstReply,
     clientLastReply: form.clientLastReply,
     analystLastReply,
+    firstChatScreenshot: String(form.firstChatScreenshot || "").trim(),
+    lastChatScreenshot: String(form.lastChatScreenshot || "").trim(),
     received: form.received,
     attempted: form.attempted,
     resolved: form.resolved,

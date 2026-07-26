@@ -30,6 +30,7 @@ import CtSelect from "@/components/ui/CtSelect";
 import LogTimePicker from "@/components/log/LogTimePicker";
 import LogTimeFieldHint from "@/components/log/LogTimeFieldHint";
 import LogOutcomeField, { type OutcomeKey } from "@/components/log/LogOutcomeField";
+import ChatScreenshotField from "@/components/records/ChatScreenshotField";
 
 const TIME_FIELDS = [
   { label: "1st Chat Receive", key: "firstReceive" as const, required: true },
@@ -184,6 +185,10 @@ export default function LogChatView() {
       setFormError("Enter a valid time for each filled field.");
       return;
     }
+    if (!String(normalizedForm.firstChatScreenshot || "").trim()) {
+      setFormError("1st Chat Screenshot is required.");
+      return;
+    }
 
     setSaving(true);
     setFormError("");
@@ -291,6 +296,8 @@ export default function LogChatView() {
               <CtSelect
                 aria-label="Profile assigned to your account"
                 openListHighlight="none"
+                searchable
+                searchPlaceholder="Search profiles…"
                 value={logChatProfileSelectValue}
                 onChange={(v) => setF("profile", v)}
                 options={[
@@ -434,6 +441,35 @@ export default function LogChatView() {
           </div>
         </section>
 
+        <section className="ct-log-shot-panel" aria-labelledby="log-shot-heading">
+          <header className="ct-log-shot-panel__head">
+            <h3 id="log-shot-heading" className="ct-log-shot-panel__title">
+              Chat screenshots
+            </h3>
+            <p className="ct-log-shot-panel__hint">
+              Upload <strong>1st chat</strong> (required) and <strong>last chat</strong>{" "}
+              screenshots. They appear next to times on the Records ledger for your team.
+            </p>
+          </header>
+          <div className="ct-log-shot-board">
+            <ChatScreenshotField
+              id="log-shot-first"
+              label="1st Chat Screenshot"
+              kind="first"
+              required
+              value={form.firstChatScreenshot}
+              onChange={(path) => setF("firstChatScreenshot", path)}
+            />
+            <ChatScreenshotField
+              id="log-shot-last"
+              label="Last Chat Screenshot"
+              kind="last"
+              value={form.lastChatScreenshot}
+              onChange={(path) => setF("lastChatScreenshot", path)}
+            />
+          </div>
+        </section>
+
         <section className="ct-log-outcomes" aria-labelledby="log-outcomes-heading">
           <h3 id="log-outcomes-heading" className="ct-log-outcomes__title">
             Chat outcomes
@@ -486,6 +522,7 @@ export default function LogChatView() {
             !enforcedTeamValue ||
             !form.date ||
             !form.firstReceive ||
+            !form.firstChatScreenshot ||
             logChatProfileMissing) && (
             <span style={{ color: C.muted, fontSize: 12 }}>
               *{" "}
@@ -495,6 +532,7 @@ export default function LogChatView() {
                   !form.date ||
                   !form.firstReceive) &&
                   "Date, Analyst, Team and 1st Chat Receive",
+                !form.firstChatScreenshot && "1st Chat Screenshot",
                 logChatProfileMissing && "Assigned profile",
               ]
                 .filter(Boolean)

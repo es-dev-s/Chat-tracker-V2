@@ -40,7 +40,14 @@ function mainTeamLeadLeadNoteOnlyInsertAllowed(
   if (String(row.note ?? "").trim() !== "") return false;
   if (String(row.leadNote ?? "").trim() === "") return false;
   if (String(row.analyst ?? "").trim() !== "") return false;
-  for (const k of ["firstReceive", "firstReply", "clientLastReply", "analystLastReply"]) {
+  for (const k of [
+    "firstReceive",
+    "firstReply",
+    "clientLastReply",
+    "analystLastReply",
+    "firstChatScreenshot",
+    "lastChatScreenshot",
+  ]) {
     if (String(row[k] ?? "").trim() !== "") return false;
   }
   if (Number(row.received) !== 0 || Number(row.attempted) !== 0 || Number(row.resolved) !== 0) {
