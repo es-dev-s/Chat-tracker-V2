@@ -185,10 +185,6 @@ export default function LogChatView() {
       setFormError("Enter a valid time for each filled field.");
       return;
     }
-    if (!String(normalizedForm.firstChatScreenshot || "").trim()) {
-      setFormError("1st Chat Screenshot is required.");
-      return;
-    }
 
     setSaving(true);
     setFormError("");
@@ -447,7 +443,7 @@ export default function LogChatView() {
               Chat screenshots
             </h3>
             <p className="ct-log-shot-panel__hint">
-              Upload <strong>1st chat</strong> (required) and <strong>last chat</strong>{" "}
+              Optionally upload <strong>1st chat</strong> and <strong>last chat</strong>{" "}
               screenshots. They appear next to times on the Records ledger for your team.
             </p>
           </header>
@@ -456,7 +452,6 @@ export default function LogChatView() {
               id="log-shot-first"
               label="1st Chat Screenshot"
               kind="first"
-              required
               value={form.firstChatScreenshot}
               onChange={(path) => setF("firstChatScreenshot", path)}
             />
@@ -522,7 +517,6 @@ export default function LogChatView() {
             !enforcedTeamValue ||
             !form.date ||
             !form.firstReceive ||
-            !form.firstChatScreenshot ||
             logChatProfileMissing) && (
             <span style={{ color: C.muted, fontSize: 12 }}>
               *{" "}
@@ -532,7 +526,6 @@ export default function LogChatView() {
                   !form.date ||
                   !form.firstReceive) &&
                   "Date, Analyst, Team and 1st Chat Receive",
-                !form.firstChatScreenshot && "1st Chat Screenshot",
                 logChatProfileMissing && "Assigned profile",
               ]
                 .filter(Boolean)

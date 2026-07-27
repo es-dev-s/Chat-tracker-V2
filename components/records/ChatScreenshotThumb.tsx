@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { TriangleAlert } from "lucide-react";
 import { chatScreenshotSrc } from "@/lib/records/screenshot-url";
 
 type Props = {
@@ -22,7 +23,11 @@ export default function ChatScreenshotThumb({ path, label }: Props) {
   }, [open]);
 
   if (!src) {
-    return <span className="ct-records-shot ct-records-shot--empty">—</span>;
+    return (
+      <span className="ct-records-shot ct-records-shot--warn" aria-hidden="true">
+        <TriangleAlert size={14} strokeWidth={2.25} className="ct-records-shot-warn__icon" />
+      </span>
+    );
   }
 
   return (

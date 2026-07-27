@@ -6280,6 +6280,24 @@ button:disabled {
   font-size: 13px;
 }
 
+.ct-records-shot--warn {
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  color: #d97706;
+  cursor: default;
+  pointer-events: none;
+  user-select: none;
+}
+
+.ct-records-shot--warn .ct-records-shot-warn__icon {
+  display: block;
+  flex-shrink: 0;
+}
+
+.ct-records-table tbody tr:hover .ct-records-shot--warn {
+  visibility: hidden;
+}
+
 .ct-records-shot__thumb {
   width: 100%;
   height: 100%;
