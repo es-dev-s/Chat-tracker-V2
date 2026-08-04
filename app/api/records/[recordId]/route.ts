@@ -9,6 +9,7 @@ import {
 } from "@/lib/auth/record-validation";
 import { mapWriteError } from "@/lib/api/map-write-error";
 import { bustWorkspaceCache, resolveApiViewer } from "@/lib/api/resolve-viewer";
+import { withCanonicalRecordTeam } from "@/lib/db/record-normalize";
 import { readRecordByIdForViewer } from "@/lib/db/records";
 import { deleteChatRecordById, upsertChatRecord } from "@/lib/db/records-write";
 
@@ -30,7 +31,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (!raw || typeof raw !== "object") {
       return NextResponse.json({ error: "RECORD_REQUIRED" }, { status: 400 });
     }
-    const rec = { ...(raw as Record<string, unknown>), id };
+    const rec = await withCanonicalRecordTeam({
+      ...(raw as Record<string, unknown>),
+      id,
+    });
     if (Number(rec.id) !== id) {
       return NextResponse.json({ error: "ID_MISMATCH" }, { status: 400 });
     }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { mapWriteError } from "@/lib/api/map-write-error";
 import { bustWorkspaceCache, resolveApiViewer } from "@/lib/api/resolve-viewer";
+import { findCaseInsensitiveDuplicate } from "@/lib/db/catalog-names";
 import { readProfiles } from "@/lib/db/catalogs";
 import { insertProfileName } from "@/lib/db/catalogs-write";
 
@@ -20,8 +21,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "PROFILE_NAME_REQUIRED" }, { status: 400 });
     }
     const existing = await readProfiles();
-    if (existing.some((t) => String(t || "").trim().toLowerCase() === trimmed.toLowerCase())) {
-      return NextResponse.json({ ok: true });
+    const duplicate = findCaseInsensitiveDuplicate(trimmed, existing);
+    if (duplicate) {
+      return NextResponse.json(
+        {
+          error: "PROFILE_NAME_CONFLICT",
+          message: `A profile named "${duplicate}" already exists. Duplicate profile names are not allowed.`,
+          existingName: duplicate,
+        },
+        { status: 409 },
+      );
     }
     await insertProfileName(trimmed);
     bustWorkspaceCache(viewer.id);

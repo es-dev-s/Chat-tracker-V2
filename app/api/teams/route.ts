@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { computeTeamCatalogAfterAdd } from "@/lib/auth/merge-snapshots";
 import { mapWriteError } from "@/lib/api/map-write-error";
 import { bustWorkspaceCache, resolveApiViewer } from "@/lib/api/resolve-viewer";
+import { findCaseInsensitiveDuplicate } from "@/lib/db/catalog-names";
 import { readTeams } from "@/lib/db/catalogs";
 import { insertTeamName } from "@/lib/db/catalogs-write";
 
@@ -18,13 +19,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "TEAM_NAME_REQUIRED" }, { status: 400 });
     }
     const existing = await readTeams();
-    if (existing.includes(trimmed)) {
-      return NextResponse.json({ ok: true });
-    }
-    if (existing.some((t) => String(t || "").trim().toLowerCase() === trimmed.toLowerCase())) {
+    const duplicate = findCaseInsensitiveDuplicate(trimmed, existing);
+    if (duplicate) {
       return NextResponse.json(
-        { error: "TEAM_NAME_CONFLICT_CASE" },
-        { status: 400 },
+        {
+          error: "TEAM_NAME_CONFLICT",
+          message: `A team named "${duplicate}" already exists. Duplicate team names are not allowed.`,
+          existingName: duplicate,
+        },
+        { status: 409 },
       );
     }
     computeTeamCatalogAfterAdd(viewer, existing, trimmed);

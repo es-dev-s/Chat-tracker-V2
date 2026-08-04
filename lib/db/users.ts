@@ -90,6 +90,10 @@ export function normEmail(v: unknown): string {
   return String(v ?? "").trim().toLowerCase();
 }
 
+export function normPersonName(v: unknown): string {
+  return String(v ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 /** Single-row lookup — used on every authenticated page load (fast session restore). */
 export async function readUserBySession(
   userId: string | number,

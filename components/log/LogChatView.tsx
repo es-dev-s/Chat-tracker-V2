@@ -76,12 +76,14 @@ export default function LogChatView() {
       ? currentUserTeams[0] || form.team
       : form.team;
 
-  const teamSelectValue =
-    currentUserTeams.includes(form.team)
-      ? form.team
-      : currentUserTeams.length === 1
-        ? currentUserTeams[0]
-        : "";
+  const teamSelectValue = (() => {
+    const match = currentUserTeams.find(
+      (t) => t.trim().toLowerCase() === String(form.team || "").trim().toLowerCase(),
+    );
+    if (match) return match;
+    if (currentUserTeams.length === 1) return currentUserTeams[0];
+    return "";
+  })();
 
   const logChatProfileSelectValue =
     assignedProfiles.length > 0 && assignedProfiles.some((n) => n === form.profile)

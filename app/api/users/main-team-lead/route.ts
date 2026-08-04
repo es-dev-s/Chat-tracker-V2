@@ -5,7 +5,7 @@ import { viewerMaySeeUserPassword } from "@/lib/auth/user-write";
 import { mapWriteError } from "@/lib/api/map-write-error";
 import { bustWorkspaceCache, resolveApiViewer } from "@/lib/api/resolve-viewer";
 import { readRecords } from "@/lib/db/records";
-import { normEmail, readUsers, stripPassword } from "@/lib/db/users";
+import { normEmail, normPersonName, readUsers, stripPassword } from "@/lib/db/users";
 import { readNextTrackerUserId, upsertTrackerUser } from "@/lib/db/users-write";
 
 export async function POST(request: Request) {
@@ -22,11 +22,33 @@ export async function POST(request: Request) {
     const allUsers = await readUsers();
     const allRecords = await readRecords();
     const email = normEmail((raw as Record<string, unknown>).email);
+    const name = String((raw as Record<string, unknown>).name ?? "").trim();
+    if (!name) {
+      return NextResponse.json({ error: "USER_NAME_REQUIRED" }, { status: 400 });
+    }
     if (!email) {
       return NextResponse.json({ error: "USER_EMAIL_REQUIRED" }, { status: 400 });
     }
     if (allUsers.some((u) => normEmail(u.email) === email)) {
-      return NextResponse.json({ error: "USER_EMAIL_CONFLICT" }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: "USER_EMAIL_CONFLICT",
+          message: "A member with this email already exists.",
+        },
+        { status: 409 },
+      );
+    }
+    const nameKey = normPersonName(name);
+    const nameClash = allUsers.find((u) => normPersonName(u.name) === nameKey);
+    if (nameClash) {
+      return NextResponse.json(
+        {
+          error: "USER_NAME_CONFLICT",
+          message: `A member named "${nameClash.name}" already exists. Duplicate member names are not allowed.`,
+          existingName: nameClash.name,
+        },
+        { status: 409 },
+      );
     }
     const id = await readNextTrackerUserId();
     const nu = mergeUserFieldsForPatch(
@@ -44,6 +66,7 @@ export async function POST(request: Request) {
       raw as Record<string, unknown>,
     );
     nu.id = id;
+    nu.name = name;
     nu.role = "mainTeamLead";
     nu.isAdmin = false;
     assertTeamLeadMayUpsertUser(viewer, null, nu, allRecords);

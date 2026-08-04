@@ -35,12 +35,24 @@ export function mapWriteError(err: unknown): NextResponse {
   }
   if (
     code === "TEAM_NAME_REQUIRED" ||
+    code === "TEAM_NAME_CONFLICT" ||
     code === "TEAM_NAME_CONFLICT_CASE" ||
     code === "PROFILE_NAME_REQUIRED" ||
+    code === "PROFILE_NAME_CONFLICT" ||
     code === "USER_EMAIL_CONFLICT" ||
-    code === "USER_EMAIL_REQUIRED"
+    code === "USER_EMAIL_REQUIRED" ||
+    code === "USER_NAME_REQUIRED" ||
+    code === "USER_NAME_CONFLICT"
   ) {
-    return NextResponse.json({ error: code }, { status: 400 });
+    const status =
+      code === "TEAM_NAME_CONFLICT" ||
+      code === "TEAM_NAME_CONFLICT_CASE" ||
+      code === "PROFILE_NAME_CONFLICT" ||
+      code === "USER_EMAIL_CONFLICT" ||
+      code === "USER_NAME_CONFLICT"
+        ? 409
+        : 400;
+    return NextResponse.json({ error: code }, { status });
   }
   if (code === "DUPLICATE_ID_IN_SYNC_PAYLOAD" || code === "DUPLICATE_TEAM_IN_SYNC_PAYLOAD") {
     return NextResponse.json({ error: code }, { status: 400 });

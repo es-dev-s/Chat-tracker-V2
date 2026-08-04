@@ -1,29 +1,34 @@
+import { canonicalizeNameList, resolveCatalogName } from "./catalog-names";
+import { readProfiles, readTeams } from "./catalogs";
 import { normEmail, readUsers, type AppUser } from "./users";
 import { checkSupabaseResult, withSupabaseFailover } from "./supabase";
 
-function uniqCaseInsensitive(arr: string[]): string[] {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const raw of arr) {
-    const t = String(raw ?? "").trim();
-    const key = t.toLowerCase();
-    if (!t || seen.has(key)) continue;
-    seen.add(key);
-    out.push(t);
-  }
-  return out;
-}
-
-function appUserToDbRow(u: AppUser) {
-  const teamNames = uniqCaseInsensitive(Array.isArray(u.teamNames) ? u.teamNames : []);
-  const profileNames = Array.isArray(u.profileNames) ? u.profileNames : [];
+function appUserToDbRow(
+  u: AppUser,
+  teamsCatalog: readonly string[],
+  profilesCatalog: readonly string[],
+) {
+  const teamNames = canonicalizeNameList(
+    Array.isArray(u.teamNames) && u.teamNames.length
+      ? u.teamNames
+      : u.teamName
+        ? [u.teamName]
+        : [],
+    teamsCatalog,
+  );
+  const profileNames = canonicalizeNameList(
+    Array.isArray(u.profileNames) ? u.profileNames : [],
+    profilesCatalog,
+  );
+  const primary =
+    resolveCatalogName(u.teamName, teamsCatalog) ?? teamNames[0] ?? "";
   return {
     user_id: String(u.id),
-    name: u.name ?? "",
+    name: String(u.name ?? "").trim(),
     role: u.role ?? "",
     email: normEmail(u.email),
     password: String(u.password ?? ""),
-    team_name: u.teamName ?? "",
+    team_name: primary,
     team_names: teamNames,
     profile_names: profileNames,
     is_admin: u.isAdmin === true,
@@ -31,8 +36,12 @@ function appUserToDbRow(u: AppUser) {
 }
 
 export async function upsertTrackerUser(u: AppUser): Promise<void> {
+  const [teamsCatalog, profilesCatalog] = await Promise.all([
+    readTeams(),
+    readProfiles(),
+  ]);
   await withSupabaseFailover(async (sb) => {
-    const row = appUserToDbRow(u);
+    const row = appUserToDbRow(u, teamsCatalog, profilesCatalog);
     const res = await sb.from("tracker_users").upsert(row, { onConflict: "user_id" });
     checkSupabaseResult(res, "upsert tracker_users");
     return null;

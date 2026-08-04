@@ -11,7 +11,9 @@ import { displayClient } from "@/lib/records/form-utils";
 import { chatScreenshotSrc } from "@/lib/records/screenshot-url";
 import { fmtMins, replyDiffFromRecord, totalConvFromRecord } from "@/lib/utils/format-duration";
 import { formatStoredTimeDisplay } from "@/lib/utils/time-input";
+import { patchChatRecord } from "@/lib/api/mutations";
 import type { ChatRecord } from "@/lib/db/records";
+import ChatScreenshotField from "@/components/records/ChatScreenshotField";
 
 function StatusBadge({ record }: { record: Partial<ChatRecord> }) {
   const hasAnalystLast = !!(String(record.analystLastReply ?? "").trim());
@@ -90,6 +92,8 @@ export default function RecordDetailModal({
   onUpdate?: (record: ChatRecord) => void;
 }) {
   const [lightbox, setLightbox] = useState<{ label: string; src: string } | null>(null);
+  const [shotBusy, setShotBusy] = useState(false);
+  const [shotError, setShotError] = useState("");
 
   const close = useCallback(() => {
     if (lightbox) {
@@ -102,6 +106,8 @@ export default function RecordDetailModal({
   useEffect(() => {
     if (!open) {
       setLightbox(null);
+      setShotError("");
+      setShotBusy(false);
       return;
     }
     const onKey = (e: KeyboardEvent) => {
@@ -110,6 +116,26 @@ export default function RecordDetailModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, close]);
+
+  const saveScreenshot = async (
+    field: "firstChatScreenshot" | "lastChatScreenshot",
+    path: string,
+  ) => {
+    if (!record || !canUpdate || shotBusy) return;
+    const current = String(record[field] ?? "").trim();
+    const next = String(path ?? "").trim();
+    if (current === next) return;
+
+    setShotBusy(true);
+    setShotError("");
+    try {
+      await patchChatRecord({ ...record, [field]: next });
+    } catch (e) {
+      setShotError(e instanceof Error ? e.message : "Could not save screenshot.");
+    } finally {
+      setShotBusy(false);
+    }
+  };
 
   if (!open || !record || typeof document === "undefined") return null;
 
@@ -129,13 +155,14 @@ export default function RecordDetailModal({
       role="presentation"
       className="ct-admin-modal-backdrop"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) close();
+        if (e.target === e.currentTarget && !shotBusy) close();
       }}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="ct-record-detail-title"
+        aria-busy={shotBusy || undefined}
         className="ct-record-detail-modal"
         style={card({
           padding: 0,
@@ -166,6 +193,7 @@ export default function RecordDetailModal({
             className="ct-catalog-modal__close"
             aria-label="Close"
             onClick={close}
+            disabled={shotBusy}
           >
             <X size={18} strokeWidth={2} aria-hidden />
           </button>
@@ -235,25 +263,54 @@ export default function RecordDetailModal({
           </section>
 
           <section className="ct-record-detail__module" aria-labelledby="ct-record-shots-heading">
-            <h3 id="ct-record-shots-heading" className="ct-record-detail__module-title">
-              Chat screenshots
-            </h3>
-            <div className="ct-record-detail__shots">
-              <ScreenshotPanel
-                label="1st Chat Screenshot"
-                path={record.firstChatScreenshot || ""}
-                onExpand={() => {
-                  if (firstSrc) setLightbox({ label: "1st Chat Screenshot", src: firstSrc });
-                }}
-              />
-              <ScreenshotPanel
-                label="Last Chat Screenshot"
-                path={record.lastChatScreenshot || ""}
-                onExpand={() => {
-                  if (lastSrc) setLightbox({ label: "Last Chat Screenshot", src: lastSrc });
-                }}
-              />
+            <div className="ct-record-detail__module-head">
+              <h3 id="ct-record-shots-heading" className="ct-record-detail__module-title">
+                Chat screenshots
+              </h3>
+              {canUpdate ? (
+                <span className="ct-record-detail__module-hint">
+                  {shotBusy ? "Saving…" : "Upload or replace anytime"}
+                </span>
+              ) : null}
             </div>
+            {canUpdate ? (
+              <div className="ct-record-detail__shots ct-record-detail__shots--editable">
+                <ChatScreenshotField
+                  id={`detail-shot-first-${record.id}`}
+                  label="1st Chat Screenshot"
+                  kind="first"
+                  value={record.firstChatScreenshot || ""}
+                  disabled={shotBusy}
+                  onChange={(path) => void saveScreenshot("firstChatScreenshot", path)}
+                />
+                <ChatScreenshotField
+                  id={`detail-shot-last-${record.id}`}
+                  label="Last Chat Screenshot"
+                  kind="last"
+                  value={record.lastChatScreenshot || ""}
+                  disabled={shotBusy}
+                  onChange={(path) => void saveScreenshot("lastChatScreenshot", path)}
+                />
+              </div>
+            ) : (
+              <div className="ct-record-detail__shots">
+                <ScreenshotPanel
+                  label="1st Chat Screenshot"
+                  path={record.firstChatScreenshot || ""}
+                  onExpand={() => {
+                    if (firstSrc) setLightbox({ label: "1st Chat Screenshot", src: firstSrc });
+                  }}
+                />
+                <ScreenshotPanel
+                  label="Last Chat Screenshot"
+                  path={record.lastChatScreenshot || ""}
+                  onExpand={() => {
+                    if (lastSrc) setLightbox({ label: "Last Chat Screenshot", src: lastSrc });
+                  }}
+                />
+              </div>
+            )}
+            {shotError ? <div className="ct-record-detail__shot-error">{shotError}</div> : null}
           </section>
 
           <section className="ct-record-detail__module" aria-labelledby="ct-record-notes-heading">
@@ -283,11 +340,17 @@ export default function RecordDetailModal({
               type="button"
               style={btnStyle("primary", { padding: "9px 18px", minHeight: 38 })}
               onClick={() => onUpdate(record)}
+              disabled={shotBusy}
             >
               Update record
             </button>
           ) : null}
-          <button type="button" {...btn("ghost", { padding: "9px 18px" })} onClick={onClose}>
+          <button
+            type="button"
+            {...btn("ghost", { padding: "9px 18px" })}
+            onClick={onClose}
+            disabled={shotBusy}
+          >
             Close
           </button>
         </div>

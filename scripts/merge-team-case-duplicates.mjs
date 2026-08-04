@@ -22,16 +22,24 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 
 function loadEnvLocal() {
-  const envPath = path.join(root, ".env.local");
-  if (!fs.existsSync(envPath)) return;
-  for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
-    const t = line.trim();
-    if (!t || t.startsWith("#")) continue;
-    const i = t.indexOf("=");
-    if (i < 1) continue;
-    const k = t.slice(0, i).trim();
-    const v = t.slice(i + 1).trim();
-    if (!process.env[k]) process.env[k] = v;
+  for (const file of [".env.local", ".env"]) {
+    const envPath = path.join(root, file);
+    if (!fs.existsSync(envPath)) continue;
+    for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
+      const t = line.trim();
+      if (!t || t.startsWith("#")) continue;
+      const i = t.indexOf("=");
+      if (i < 1) continue;
+      const k = t.slice(0, i).trim();
+      let v = t.slice(i + 1).trim();
+      if (
+        (v.startsWith('"') && v.endsWith('"')) ||
+        (v.startsWith("'") && v.endsWith("'"))
+      ) {
+        v = v.slice(1, -1);
+      }
+      if (!process.env[k]) process.env[k] = v;
+    }
   }
 }
 
@@ -101,25 +109,38 @@ async function main() {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const [teamsRes, usersRes, recordsRes] = await Promise.all([
-    sb.from("tracker_teams").select("name, sort_index"),
-    sb.from("tracker_users").select("user_id, team_name, team_names"),
-    sb.from("chat_records").select("id, team"),
-  ]);
-
-  for (const res of [teamsRes, usersRes, recordsRes]) {
-    if (res.error) {
-      console.error("Supabase error:", res.error.message);
-      process.exit(1);
+  async function fetchAll(table, columns) {
+    const pageSize = 1000;
+    let from = 0;
+    const all = [];
+    while (true) {
+      const res = await sb.from(table).select(columns).range(from, from + pageSize - 1);
+      if (res.error) throw new Error(`${table}: ${res.error.message}`);
+      all.push(...(res.data ?? []));
+      if (!res.data || res.data.length < pageSize) break;
+      from += pageSize;
     }
+    return all;
   }
 
-  const teams = (teamsRes.data ?? []).map((r) => ({
+  let teamsRaw;
+  let users;
+  let records;
+  try {
+    [teamsRaw, users, records] = await Promise.all([
+      fetchAll("tracker_teams", "name, sort_index"),
+      fetchAll("tracker_users", "user_id, team_name, team_names"),
+      fetchAll("chat_records", "id, team"),
+    ]);
+  } catch (err) {
+    console.error("Supabase error:", err instanceof Error ? err.message : err);
+    process.exit(1);
+  }
+
+  const teams = teamsRaw.map((r) => ({
     name: String(r.name ?? "").trim(),
     sortIndex: Number.isFinite(Number(r.sort_index)) ? Number(r.sort_index) : Number.POSITIVE_INFINITY,
   })).filter((r) => r.name);
-  const users = usersRes.data ?? [];
-  const records = recordsRes.data ?? [];
 
   const groups = {};
   for (const t of teams) {

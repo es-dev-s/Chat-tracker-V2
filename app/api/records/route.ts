@@ -7,6 +7,7 @@ import {
 import { filterRecordsForViewer } from "@/lib/auth/scoping";
 import { mapWriteError } from "@/lib/api/map-write-error";
 import { bustWorkspaceCache, resolveApiViewer } from "@/lib/api/resolve-viewer";
+import { withCanonicalRecordTeam } from "@/lib/db/record-normalize";
 import { insertChatRecord } from "@/lib/db/records-write";
 import { readRecords } from "@/lib/db/records";
 
@@ -38,7 +39,8 @@ export async function POST(request: Request) {
     }
     const { id: _clientId, ...rest } = raw as Record<string, unknown>;
     void _clientId;
-    const normalized = withValidatedRecordOutcomes(rest, undefined);
+    const canonical = await withCanonicalRecordTeam(rest);
+    const normalized = withValidatedRecordOutcomes(canonical, undefined);
     validateRecordTimeOrder(normalized);
     const commitPost = checkViewerMayCommitRecord(viewer, normalized, undefined);
     if (!commitPost.ok) {

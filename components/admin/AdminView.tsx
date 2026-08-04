@@ -132,22 +132,50 @@ export default function AdminView() {
     });
   };
 
+  const resolveCatalogNames = (rawNames: string[], catalog: string[]) => {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of rawNames) {
+      const trimmed = String(raw ?? "").trim();
+      if (!trimmed) continue;
+      const hit = catalog.find((c) => c.toLowerCase() === trimmed.toLowerCase());
+      const resolved = hit || trimmed;
+      const key = resolved.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(resolved);
+    }
+    return out;
+  };
+
   const createUser = async (): Promise<boolean> => {
     const name = newUserName.trim();
     const email = newAnalystEmail.trim().toLowerCase();
     const password = newAnalystPassword.trim();
-    const teamNames = [...new Set(newUserTeamNames.map((t) => t.trim()).filter(Boolean))];
+    const teamNames = resolveCatalogNames(newUserTeamNames, teams);
     const profileNames =
       adminAddRole === "mainTeamLead"
         ? []
-        : [...new Set(newUserProfileNames.map((t) => t.trim()).filter(Boolean))];
+        : resolveCatalogNames(newUserProfileNames, profiles);
     const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     if (!name || !validEmail || password.length < 6 || !teamNames.length) {
       setUserError("Name, email, password (min 6), and at least one team are required.");
       return false;
     }
     if (users.some((u) => normEmail(u.email) === email)) {
-      setUserError("User with this email already exists.");
+      setUserError("A member with this email already exists.");
+      return false;
+    }
+    if (
+      users.some(
+        (u) =>
+          String(u.name ?? "")
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, " ") === name.toLowerCase().replace(/\s+/g, " "),
+      )
+    ) {
+      setUserError("A member with this name already exists. Duplicate member names are not allowed.");
       return false;
     }
 
@@ -177,7 +205,7 @@ export default function AdminView() {
         await addTeam(t);
       }
       for (const p of profileNames.filter(
-        (name) => !profiles.some((x) => x.toLowerCase() === name.toLowerCase()),
+        (profile) => !profiles.some((x) => x.toLowerCase() === profile.toLowerCase()),
       )) {
         await addProfile(p);
       }
@@ -210,18 +238,17 @@ export default function AdminView() {
   const addTeamName = async (): Promise<boolean> => {
     const teamName = newTeamName.trim();
     if (!teamName) return false;
-    if (teams.some((t) => t.toLowerCase() === teamName.toLowerCase())) return false;
+    const existingTeam = teams.find((t) => t.toLowerCase() === teamName.toLowerCase());
+    if (existingTeam) {
+      window.alert(
+        `A team named "${existingTeam}" already exists. Duplicate team names are not allowed.`,
+      );
+      return false;
+    }
     try {
       await addTeam(teamName);
     } catch (e) {
-      const code = e instanceof Error ? e.message : String(e);
-      window.alert(
-        code === "TEAM_NAME_CONFLICT_CASE"
-          ? `A team named "${teamName}" already exists with different capitalization. Use the existing name or remove it first.`
-          : e instanceof Error
-            ? e.message
-            : "Could not save team.",
-      );
+      window.alert(e instanceof Error ? e.message : "Could not save team.");
       return false;
     }
     setNewTeamName("");
@@ -232,7 +259,15 @@ export default function AdminView() {
   const addProfileName = async (): Promise<boolean> => {
     const profileName = newProfileName.trim();
     if (!profileName) return false;
-    if (profiles.some((p) => p.toLowerCase() === profileName.toLowerCase())) return false;
+    const existingProfile = profiles.find(
+      (p) => p.toLowerCase() === profileName.toLowerCase(),
+    );
+    if (existingProfile) {
+      window.alert(
+        `A profile named "${existingProfile}" already exists. Duplicate profile names are not allowed.`,
+      );
+      return false;
+    }
     try {
       await addProfile(profileName);
     } catch (e) {
@@ -436,22 +471,24 @@ export default function AdminView() {
   const saveMemberTeams = async (userId: string | number): Promise<boolean> => {
     const target = users.find((u) => String(u.id) === String(userId));
     if (!target || !teamLeadManagesUser(target)) return false;
-    const allowed = new Set(teams.map((t) => t.trim().toLowerCase()));
+    const catalogByLc = new Map(
+      teams.map((t) => [t.trim().toLowerCase(), t.trim()] as const),
+    );
     const raw = memberTeamsDraft[userId] || [];
     const fromPicker = [
-      ...new Set(raw.map((t) => t.trim()).filter((t) => allowed.has(t.toLowerCase()))),
+      ...new Set(
+        raw
+          .map((t) => t.trim())
+          .filter(Boolean)
+          .map((t) => catalogByLc.get(t.toLowerCase()))
+          .filter((t): t is string => !!t),
+      ),
     ];
-    const preserved = memberTeams(target).filter(
-      (t) => !allowed.has(t.trim().toLowerCase()),
-    );
-    const names = [...new Set([...fromPicker, ...preserved].map((t) => t.trim()).filter(Boolean))];
-    const missingTeams = names.filter(
-      (team) => !teams.some((t) => t.toLowerCase() === team.toLowerCase()),
-    );
+    const preservedOutOfCatalog = memberTeams(target)
+      .map((t) => t.trim())
+      .filter((t) => t && !catalogByLc.has(t.toLowerCase()));
+    const names = [...new Set([...fromPicker, ...preservedOutOfCatalog])];
     try {
-      for (const t of missingTeams) {
-        await addTeam(t);
-      }
       await patchUser(userId, { ...target, teamName: names[0] || "", teamNames: names });
     } catch (e) {
       window.alert(e instanceof Error ? e.message : "Could not save team assignments.");
@@ -493,26 +530,24 @@ export default function AdminView() {
   const saveMemberProfiles = async (userId: string | number): Promise<boolean> => {
     const target = users.find((u) => String(u.id) === String(userId));
     if (!target || !teamLeadManagesUser(target)) return false;
-    const allowed = new Set(profiles.map((name) => name.trim().toLowerCase()));
+    const catalogByLc = new Map(
+      profiles.map((name) => [name.trim().toLowerCase(), name.trim()] as const),
+    );
     const raw = memberProfilesDraft[userId] || [];
     const fromPicker = [
       ...new Set(
-        raw.map((name) => name.trim()).filter((name) => allowed.has(name.toLowerCase())),
+        raw
+          .map((name) => name.trim())
+          .filter(Boolean)
+          .map((name) => catalogByLc.get(name.toLowerCase()))
+          .filter((name): name is string => !!name),
       ),
     ];
-    const preserved = memberProfiles(target).filter(
-      (name) => !allowed.has(name.trim().toLowerCase()),
-    );
-    const names = [
-      ...new Set([...fromPicker, ...preserved].map((name) => name.trim()).filter(Boolean)),
-    ];
-    const missingProfiles = names.filter(
-      (name) => !profiles.some((p) => p.toLowerCase() === name.toLowerCase()),
-    );
+    const preservedOutOfCatalog = memberProfiles(target)
+      .map((name) => name.trim())
+      .filter((name) => name && !catalogByLc.has(name.toLowerCase()));
+    const names = [...new Set([...fromPicker, ...preservedOutOfCatalog])];
     try {
-      for (const name of missingProfiles) {
-        await addProfile(name);
-      }
       await patchUser(userId, { ...target, profileNames: names });
     } catch (e) {
       window.alert(e instanceof Error ? e.message : "Could not save profile assignments.");

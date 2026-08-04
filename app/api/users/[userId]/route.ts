@@ -8,7 +8,7 @@ import {
 import { mapWriteError } from "@/lib/api/map-write-error";
 import { bustWorkspaceCache, resolveApiViewer } from "@/lib/api/resolve-viewer";
 import { readRecords } from "@/lib/db/records";
-import { readUsers, stripPassword } from "@/lib/db/users";
+import { normEmail, normPersonName, readUsers, stripPassword } from "@/lib/db/users";
 import { deleteUserById, upsertTrackerUser } from "@/lib/db/users-write";
 
 type RouteContext = { params: Promise<{ userId: string }> };
@@ -36,6 +36,41 @@ export async function PATCH(request: Request, context: RouteContext) {
     const merged = mergeUserFieldsForPatch(target, raw as Record<string, unknown>);
     merged.id = target.id;
     merged.role = target.role;
+    const nextName = String(merged.name ?? "").trim();
+    if (!nextName) {
+      return NextResponse.json({ error: "USER_NAME_REQUIRED" }, { status: 400 });
+    }
+    merged.name = nextName;
+    const nameKey = normPersonName(nextName);
+    const nameClash = allUsers.find(
+      (u) => String(u.id) !== String(userId) && normPersonName(u.name) === nameKey,
+    );
+    if (nameClash) {
+      return NextResponse.json(
+        {
+          error: "USER_NAME_CONFLICT",
+          message: `A member named "${nameClash.name}" already exists. Duplicate member names are not allowed.`,
+          existingName: nameClash.name,
+        },
+        { status: 409 },
+      );
+    }
+    const nextEmail = normEmail(merged.email);
+    if (!nextEmail) {
+      return NextResponse.json({ error: "USER_EMAIL_REQUIRED" }, { status: 400 });
+    }
+    const emailClash = allUsers.find(
+      (u) => String(u.id) !== String(userId) && normEmail(u.email) === nextEmail,
+    );
+    if (emailClash) {
+      return NextResponse.json(
+        {
+          error: "USER_EMAIL_CONFLICT",
+          message: "A member with this email already exists.",
+        },
+        { status: 409 },
+      );
+    }
     assertTeamLeadMayUpsertUser(viewer, target, merged, allRecords);
     await upsertTrackerUser(merged);
     bustWorkspaceCache(viewer.id);

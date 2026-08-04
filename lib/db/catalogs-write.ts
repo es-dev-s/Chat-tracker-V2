@@ -1,4 +1,5 @@
-import { readTeams } from "./catalogs";
+import { findCaseInsensitiveDuplicate } from "./catalog-names";
+import { readProfiles, readTeams } from "./catalogs";
 import { checkSupabaseResult, withSupabaseFailover } from "./supabase";
 import { readUsers } from "./users";
 import { deleteUserById, upsertTrackerUser } from "./users-write";
@@ -35,9 +36,8 @@ export async function insertTeamName(name: string): Promise<void> {
   const trimmed = String(name || "").trim();
   if (!trimmed) throw new Error("TEAM_NAME_REQUIRED");
   const existing = await readTeams();
-  if (existing.includes(trimmed)) return;
-  if (existing.some((t) => t.trim().toLowerCase() === trimmed.toLowerCase())) {
-    throw new Error("TEAM_NAME_CONFLICT_CASE");
+  if (findCaseInsensitiveDuplicate(trimmed, existing)) {
+    throw new Error("TEAM_NAME_CONFLICT");
   }
   const nextIndex = (await readMaxTeamSortIndex()) + 1;
   await withSupabaseFailover(async (sb) => {
@@ -50,6 +50,10 @@ export async function insertTeamName(name: string): Promise<void> {
 export async function insertProfileName(name: string): Promise<void> {
   const trimmed = String(name || "").trim();
   if (!trimmed) throw new Error("PROFILE_NAME_REQUIRED");
+  const existing = await readProfiles();
+  if (findCaseInsensitiveDuplicate(trimmed, existing)) {
+    throw new Error("PROFILE_NAME_CONFLICT");
+  }
   const nextIndex = (await readMaxProfileSortIndex()) + 1;
   await withSupabaseFailover(async (sb) => {
     const res = await sb.from("tracker_profiles").insert({ name: trimmed, sort_index: nextIndex });

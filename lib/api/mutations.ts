@@ -7,7 +7,22 @@ import { useWorkspaceStore } from "@/store/workspace-store";
 async function parseApiError(res: Response): Promise<string> {
   try {
     const body = await res.json();
-    return String(body?.error || `Request failed (${res.status})`);
+    const message = String(body?.message || "").trim();
+    if (message) return message;
+    const code = String(body?.error || "").trim();
+    if (code === "TEAM_NAME_CONFLICT" || code === "TEAM_NAME_CONFLICT_CASE") {
+      return "A team with this name already exists. Duplicate team names are not allowed.";
+    }
+    if (code === "PROFILE_NAME_CONFLICT") {
+      return "A profile with this name already exists. Duplicate profile names are not allowed.";
+    }
+    if (code === "USER_EMAIL_CONFLICT") {
+      return "A member with this email already exists.";
+    }
+    if (code === "USER_NAME_CONFLICT") {
+      return "A member with this name already exists. Duplicate member names are not allowed.";
+    }
+    return code || `Request failed (${res.status})`;
   } catch {
     return `Request failed (${res.status})`;
   }

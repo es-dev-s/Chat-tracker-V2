@@ -32,6 +32,7 @@ export async function readProfiles(): Promise<string[]> {
       .select("name")
       .order("sort_index", { ascending: true });
     checkSupabaseResult(res, "read tracker_profiles");
-    return (res.data || []).map((row) => String(row.name ?? "")).filter(Boolean);
+    const names = (res.data || []).map((row) => String(row.name ?? "")).filter(Boolean);
+    return dedupeCaseInsensitive(names);
   });
 }
