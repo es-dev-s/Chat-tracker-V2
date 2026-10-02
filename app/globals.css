@@ -2616,6 +2616,244 @@ input:focus-visible {
 
 .ct-chart-grid-wide {
   grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  align-items: stretch;
+}
+
+.ct-chart-grid-wide > .ct-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ct-team-chart {
+  height: 200px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.ct-team-chart__empty {
+  margin: 0;
+  height: 200px;
+  display: flex;
+  align-items: center;
+  color: var(--ct-muted);
+  font-size: 13px;
+}
+
+.ct-team-chart__hover {
+  height: 22px;
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ct-muted);
+  font-size: 12px;
+  line-height: 22px;
+}
+
+.ct-team-chart__hover-name {
+  color: var(--ct-text);
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ct-team-chart__hover-count {
+  margin-left: auto;
+  color: var(--ct-label);
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.ct-team-chart__plot {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ct-team-chart__y {
+  position: relative;
+  flex: 0 0 46px;
+  width: 46px;
+  height: calc(100% - 14px);
+  align-self: flex-start;
+  display: flex;
+  flex-direction: column;
+  padding-top: 16px;
+}
+
+.ct-team-chart__axis-label {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 16px;
+  margin: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 16px;
+  color: var(--ct-muted);
+}
+
+.ct-team-chart__ticks {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  color: var(--ct-muted);
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.ct-team-chart__axis-spacer {
+  height: 16px;
+  margin-top: 6px;
+  color: var(--ct-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 16px;
+  text-align: right;
+}
+
+.ct-team-chart__scroll {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 14px;
+  scrollbar-color: var(--ct-border-strong) transparent;
+}
+
+.ct-team-chart__scroll:focus-visible {
+  outline: 2px solid var(--ct-accent);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.ct-team-chart__columns {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  flex: 1 0 max-content;
+  width: max(100%, max-content);
+  min-height: 100%;
+}
+
+.ct-team-chart__grid {
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 16px;
+  bottom: 22px;
+}
+
+.ct-team-chart__gridline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--ct-border-subtle);
+}
+
+.ct-team-chart__col {
+  position: relative;
+  z-index: 1;
+  flex: 1 0 max-content;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  min-width: 84px;
+  height: 100%;
+  margin: 0;
+  padding: 16px 14px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ct-team-chart__col:focus-visible {
+  outline: 2px solid var(--ct-accent);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+
+.ct-team-chart__value {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 4px);
+  transform: translateX(-50%);
+  color: var(--ct-label);
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.ct-team-chart__track {
+  width: 22px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: flex-end;
+}
+
+.ct-team-chart__bar {
+  position: relative;
+  display: block;
+  width: 100%;
+  border-radius: 6px 6px 2px 2px;
+  transition: opacity 160ms ease;
+}
+
+.ct-team-chart__name {
+  height: 16px;
+  margin-top: 6px;
+  color: var(--ct-label);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.ct-team-chart__col.is-active .ct-team-chart__name {
+  color: var(--ct-text);
+  font-weight: 600;
+}
+
+.ct-team-chart.is-active .ct-team-chart__bar {
+  opacity: 0.35;
+}
+
+.ct-team-chart.is-active .ct-team-chart__col.is-active .ct-team-chart__bar {
+  opacity: 1;
+}
+
+.ct-team-chart__swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex: 0 0 auto;
 }
 
 .ct-chart-skeleton {
