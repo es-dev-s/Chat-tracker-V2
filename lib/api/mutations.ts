@@ -88,6 +88,26 @@ export async function patchChatRecord(record: ChatRecord | Record<string, unknow
   return saved;
 }
 
+export async function acknowledgeChatRecord(id: number): Promise<ChatRecord> {
+  const res = await fetch(`/api/records/${encodeURIComponent(String(id))}/acknowledge`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (res.status === 401) {
+    void useAuthStore.getState().logout();
+    throw new Error("Session expired.");
+  }
+  if (!res.ok) throw new Error(await parseApiError(res));
+  const data = await res.json();
+  const saved = data.record as ChatRecord;
+  useWorkspaceStore.getState().patchRecordAcknowledgement(
+    saved.id,
+    saved.acknowledgedAt ?? null,
+    saved.acknowledgedBy ?? null,
+  );
+  return saved;
+}
+
 export async function deleteChatRecord(id: number): Promise<void> {
   const prevRecords = useWorkspaceStore.getState().records;
   useWorkspaceStore.getState().removeRecord(id);

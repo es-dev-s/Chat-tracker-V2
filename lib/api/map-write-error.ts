@@ -2,6 +2,28 @@ import { NextResponse } from "next/server";
 
 export function mapWriteError(err: unknown): NextResponse {
   const code = err instanceof Error ? err.message : String(err);
+  const followUpColumns = [
+    "amount_to_pay",
+    "required_documents",
+    "class_session_date",
+    "class_session_time",
+    "class_session_instructions",
+  ];
+  const missingColumnError =
+    /could not find|does not exist|schema cache|undefined_column|42703|PGRST204/i.test(code) &&
+    followUpColumns.some((column) => code.toLowerCase().includes(column));
+
+  if (missingColumnError) {
+    return NextResponse.json(
+      {
+        error: "DATABASE_SCHEMA_OUTDATED",
+        message:
+          "The database is missing Chat Tracker follow-up fields. Apply the amount and client follow-up migrations, then retry.",
+      },
+      { status: 503 },
+    );
+  }
+
   if (
     code === "RECORD_OUT_OF_SCOPE" ||
     code === "USER_OUT_OF_SCOPE" ||

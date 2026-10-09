@@ -32,7 +32,7 @@ const PATH_TO_TAB = {
 
 function tabsForRole(role) {
   if (role === "teamLead") return ["dashboard", "records", "notes", "admin"];
-  if (role === "mainTeamLead") return ["dashboard", "leads", "leadNotes"];
+  if (role === "mainTeamLead") return ["dashboard", "records", "leads", "leadNotes"];
   return ["dashboard", "log", "records", "notes"];
 }
 
@@ -64,7 +64,7 @@ const PAGE_MATRIX = [
   },
   {
     path: ROUTES.records,
-    roles: ["analyst", "teamLead"],
+    roles: ["analyst", "teamLead", "mainTeamLead"],
     table: "Chat ledger",
     pagination: true,
     paginationFile: "components/records/RecordsView.tsx",

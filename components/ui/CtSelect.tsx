@@ -24,6 +24,8 @@ type CtSelectProps = {
   searchPlaceholder?: string;
   /** Auto-enable search when option count is at or above this (ignored if searchable is set). */
   searchThreshold?: number;
+  /** Keep a visible scrollbar on the option list. */
+  showScrollbar?: boolean;
 };
 
 /** Custom single-select (replaces native HTML select). Same value/onChange contract: string values. */
@@ -42,6 +44,7 @@ export default function CtSelect({
   searchable,
   searchPlaceholder,
   searchThreshold = 8,
+  showScrollbar = false,
 }: CtSelectProps) {
   const genId = useId();
   const baseId = idProp || genId;
@@ -342,10 +345,11 @@ export default function CtSelect({
             role="listbox"
             tabIndex={-1}
             onKeyDown={onKeyList}
+            className={showScrollbar ? "ct-select-menu-scroll" : undefined}
             style={{
               flex: 1,
               minHeight: 0,
-              overflowY: "auto",
+              overflowY: showScrollbar ? "scroll" : "auto",
               padding: 4,
             }}
           >

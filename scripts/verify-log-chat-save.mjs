@@ -44,11 +44,39 @@ function diffMins(t1, t2) {
   return a != null && b != null ? b - a : null;
 }
 
+const REMARK_OPTIONS = [
+  "New Inquiry (CDR or other occupation)",
+  "Payment Inquiry (bank details)",
+  "Files Delay Concern",
+  "EA/ other occupation feedback",
+  "CV check request",
+  "Draft files request",
+  "Portal upload request",
+  "Payment made - work pending",
+  "Others",
+  "Lost",
+  "Need a call",
+  "Negotiating client",
+  "Waiting for the update",
+  "Document check request",
+];
+const REMARK_MARKER = "[[ct-remark]]";
+
+function composeRemarkNote(category, details) {
+  const cat = String(category ?? "").trim();
+  const text = String(details ?? "");
+  if (!REMARK_OPTIONS.includes(cat)) return text;
+  const body = text.trim();
+  if (!body) return `${REMARK_MARKER}${cat}`;
+  return `${REMARK_MARKER}${cat}\n${body}`;
+}
+
 function buildChatRecordFromForm(form, user, useFirstReplyAsLast) {
   const nowIso = new Date().toISOString();
   const analystLastReply =
     !form.clientLastReply && useFirstReplyAsLast ? form.firstReply : form.analystLastReply;
-  const noteTrim = (form.note || "").trim();
+  const storedNote = composeRemarkNote(form.remarkCategory, form.note);
+  const noteTrim = storedNote.trim();
   return {
     date: form.date,
     analyst: form.analyst,
@@ -56,7 +84,7 @@ function buildChatRecordFromForm(form, user, useFirstReplyAsLast) {
     profile: String(form.profile || "").trim(),
     clientName: String(form.clientName || "").trim(),
     phone: form.phone,
-    note: form.note,
+    note: storedNote,
     firstReceive: form.firstReceive,
     firstReply: form.firstReply,
     clientLastReply: form.clientLastReply,
@@ -261,6 +289,54 @@ const scenarios = [
     useFirstReplyAsLast: false,
     expect: { received: 0, attempted: 0, resolved: 0 },
   },
+  {
+    name: "remark type plus additional text",
+    form: {
+      date: "2026-05-25",
+      analyst: "Test Analyst",
+      team: "Team Alpha",
+      profile: "Profile One",
+      clientName: "",
+      phone: "",
+      remarkCategory: "Need a call",
+      note: "Client asked for tomorrow morning",
+      firstReceive: "09:00:00",
+      firstReply: "",
+      clientLastReply: "",
+      analystLastReply: "",
+      received: 1,
+      attempted: 0,
+      resolved: 0,
+    },
+    useFirstReplyAsLast: false,
+    expect: {
+      note: "[[ct-remark]]Need a call\nClient asked for tomorrow morning",
+    },
+  },
+  {
+    name: "remark type only",
+    form: {
+      date: "2026-05-25",
+      analyst: "Test Analyst",
+      team: "Team Alpha",
+      profile: "",
+      clientName: "",
+      phone: "",
+      remarkCategory: "Lost",
+      note: "   ",
+      firstReceive: "09:00:00",
+      firstReply: "",
+      clientLastReply: "",
+      analystLastReply: "",
+      received: 1,
+      attempted: 0,
+      resolved: 0,
+    },
+    useFirstReplyAsLast: false,
+    expect: {
+      note: "[[ct-remark]]Lost",
+    },
+  },
 ];
 
 let passed = 0;
@@ -422,7 +498,48 @@ async function runLiveApiTest() {
     console.log(`  (cleaned up record id ${saved.id})`);
   } else {
     failed++;
+    await sb.from("chat_records").delete().eq("id", saved.id);
   }
+
+  const remarkForm = {
+    ...form,
+    clientName: `Verify Remark ${stamp}`,
+    remarkCategory: "Document check request",
+    note: `extra detail ${stamp}`,
+  };
+  const remarkPayload = buildChatRecordFromForm(
+    remarkForm,
+    { name: analyst.name, email: analyst.email },
+    false,
+  );
+  const remarkRes = await fetch(`${base}/api/records`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: cookie,
+      Authorization: `Bearer ${loginBody.token}`,
+    },
+    body: JSON.stringify({ record: remarkPayload }),
+  });
+  if (!remarkRes.ok) {
+    console.log("FAIL remark POST", remarkRes.status, await remarkRes.text());
+    failed++;
+    return;
+  }
+  const { record: remarkSaved } = await remarkRes.json();
+  const remarkOk = assertEq(
+    "remark note",
+    remarkSaved.note,
+    `[[ct-remark]]Document check request\nextra detail ${stamp}`,
+  );
+  if (remarkOk) {
+    console.log("  PASS live remark type and details saved");
+    passed++;
+  } else {
+    failed++;
+  }
+  await sb.from("chat_records").delete().eq("id", remarkSaved.id);
+  console.log(`  (cleaned up record id ${remarkSaved.id})`);
 }
 
 runUnitTests();

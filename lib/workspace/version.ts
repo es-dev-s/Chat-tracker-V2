@@ -14,6 +14,7 @@ export type RecordFingerprint = {
   firstReply: string;
   noteUpdatedAt: string | null;
   leadNoteUpdatedAt: string | null;
+  amountToPay?: string;
 };
 
 function hashString(value: string): number {
@@ -38,6 +39,7 @@ function fingerprintChecksum(rows: RecordFingerprint[]): number {
     h = (h * 31 + hashString(r.date)) | 0;
     h = (h * 31 + hashString(r.analyst)) | 0;
     h = (h * 31 + hashString(r.team)) | 0;
+    h = (h * 31 + hashString(r.amountToPay ?? "")) | 0;
   }
   return h >>> 0;
 }

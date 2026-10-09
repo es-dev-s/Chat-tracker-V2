@@ -1,5 +1,10 @@
 import type { ChatRecord } from "./records";
+import { normalizeAmountToPay } from "@/lib/records/amount";
 import { checkSupabaseResult, withSupabaseFailover } from "./supabase";
+
+function normalizeFollowUpText(value: unknown, maxLength: number): string {
+  return String(value ?? "").trim().slice(0, maxLength);
+}
 
 function appRecordToDbRowForInsert(rec: Record<string, unknown>) {
   return {
@@ -10,6 +15,23 @@ function appRecordToDbRowForInsert(rec: Record<string, unknown>) {
     client_name: rec.clientName ?? "",
     phone: rec.phone ?? "",
     note: rec.note ?? "",
+    amount_to_pay: normalizeAmountToPay(rec.amountToPay ?? rec.amount_to_pay),
+    required_documents: normalizeFollowUpText(
+      rec.requiredDocuments ?? rec.required_documents,
+      1000,
+    ),
+    class_session_date: normalizeFollowUpText(
+      rec.classSessionDate ?? rec.class_session_date,
+      10,
+    ),
+    class_session_time: normalizeFollowUpText(
+      rec.classSessionTime ?? rec.class_session_time,
+      5,
+    ),
+    class_session_instructions: normalizeFollowUpText(
+      rec.classSessionInstructions ?? rec.class_session_instructions,
+      1000,
+    ),
     first_receive: rec.firstReceive ?? "",
     first_reply: rec.firstReply ?? "",
     client_last_reply: rec.clientLastReply ?? "",
@@ -49,6 +71,11 @@ function dbChatRowToApp(row: Record<string, unknown>): ChatRecord | null {
     clientName: String(row.client_name ?? ""),
     phone: String(row.phone ?? ""),
     note: String(row.note ?? ""),
+    amountToPay: String(row.amount_to_pay ?? ""),
+    requiredDocuments: String(row.required_documents ?? ""),
+    classSessionDate: String(row.class_session_date ?? ""),
+    classSessionTime: String(row.class_session_time ?? ""),
+    classSessionInstructions: String(row.class_session_instructions ?? ""),
     firstReceive: String(row.first_receive ?? ""),
     firstReply: String(row.first_reply ?? ""),
     clientLastReply: String(row.client_last_reply ?? ""),
@@ -68,6 +95,8 @@ function dbChatRowToApp(row: Record<string, unknown>): ChatRecord | null {
     leadNoteUpdatedBy:
       row.lead_note_updated_by != null ? String(row.lead_note_updated_by) : null,
     isLeadNoteOnly: Boolean(row.is_lead_note_only),
+    acknowledgedAt: row.acknowledged_at != null ? String(row.acknowledged_at) : null,
+    acknowledgedBy: row.acknowledged_by != null ? String(row.acknowledged_by) : null,
     createdBy: String(row.created_by ?? ""),
     updatedAt: row.updated_at != null ? String(row.updated_at) : null,
   };
@@ -92,6 +121,31 @@ export async function upsertChatRecord(rec: Record<string, unknown>): Promise<vo
     const res = await sb.from("chat_records").upsert(row, { onConflict: "id" });
     checkSupabaseResult(res, "upsert chat_records");
     return null;
+  });
+}
+
+/** Sets or clears acknowledgement on one row. Does not rewrite the rest of the chat. */
+export async function setChatRecordAcknowledged(
+  recordId: number,
+  acknowledged: boolean,
+  acknowledgedBy: string | null,
+): Promise<ChatRecord> {
+  const now = new Date().toISOString();
+  return withSupabaseFailover(async (sb) => {
+    const res = await sb
+      .from("chat_records")
+      .update({
+        acknowledged_at: acknowledged ? now : null,
+        acknowledged_by: acknowledged ? acknowledgedBy : null,
+        updated_at: now,
+      })
+      .eq("id", recordId)
+      .select("*")
+      .maybeSingle();
+    checkSupabaseResult(res, "acknowledge chat_record");
+    const mapped = dbChatRowToApp(res.data as Record<string, unknown>);
+    if (!mapped) throw new Error("acknowledge chat_record: invalid row");
+    return mapped;
   });
 }
 

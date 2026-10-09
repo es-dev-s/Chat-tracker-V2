@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { C, SANS } from "@/lib/design/tokens";
+import { C } from "@/lib/design/tokens";
 import { BusyLabel } from "@/components/ui/BusySpinner";
 import { postChatRecord } from "@/lib/api/mutations";
 import {
@@ -30,6 +30,7 @@ import CtSelect from "@/components/ui/CtSelect";
 import LogTimePicker from "@/components/log/LogTimePicker";
 import LogTimeFieldHint from "@/components/log/LogTimeFieldHint";
 import LogOutcomeField, { type OutcomeKey } from "@/components/log/LogOutcomeField";
+import LogRemarksFields from "@/components/log/LogRemarksFields";
 import ChatScreenshotField from "@/components/records/ChatScreenshotField";
 
 const TIME_FIELDS = [
@@ -349,15 +350,13 @@ export default function LogChatView() {
           </div>
         </div>
 
-        <div style={{ marginBottom: 20 }}>
-          <div style={fieldLabelStyle()}>Note (optional)</div>
-          <textarea
-            style={inputStyle({ minHeight: 70, resize: "vertical", fontFamily: SANS })}
-            value={form.note}
-            onChange={(e) => setF("note", e.target.value)}
-            placeholder="Important info about this lead/chat"
-          />
-        </div>
+        <LogRemarksFields
+          idPrefix="log-remarks"
+          category={form.remarkCategory}
+          details={form.note}
+          onCategoryChange={(v) => setF("remarkCategory", v)}
+          onDetailsChange={(v) => setF("note", v)}
+        />
 
         <section className="ct-log-time-panel" aria-labelledby="log-time-heading">
           <header className="ct-log-time-panel__head">

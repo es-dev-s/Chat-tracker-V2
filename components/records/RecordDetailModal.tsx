@@ -8,6 +8,7 @@ import { C } from "@/lib/design/tokens";
 import { teamColorFor } from "@/lib/design/colors";
 import { badgeStyle, btnStyle } from "@/lib/styles/controls";
 import { displayClient } from "@/lib/records/form-utils";
+import { formatRemarkNoteDisplay } from "@/lib/records/remarks";
 import { chatScreenshotSrc } from "@/lib/records/screenshot-url";
 import { fmtMins, replyDiffFromRecord, totalConvFromRecord } from "@/lib/utils/format-duration";
 import { formatStoredTimeDisplay } from "@/lib/utils/time-input";
@@ -319,9 +320,9 @@ export default function RecordDetailModal({
             </h3>
             <div className="ct-record-detail__notes">
               <div className="ct-record-detail__note-block">
-                <div className="ct-record-detail__note-label">Analyst note</div>
+                <div className="ct-record-detail__note-label">Remarks</div>
                 <div className="ct-record-detail__note-body">
-                  {(record.note || "").trim() || "—"}
+                  {formatRemarkNoteDisplay(record.note || "") || "—"}
                 </div>
               </div>
               <div className="ct-record-detail__note-block">

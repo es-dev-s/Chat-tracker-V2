@@ -167,6 +167,7 @@ export default function LeadsView() {
         analystEmptyMessage="No analyst notes added yet."
         paginationNavLabel="Chat Analyst Notes pagination (all leads)"
         profileFilterKey={profileFilter}
+        showAcknowledge
       />
     </div>
   );

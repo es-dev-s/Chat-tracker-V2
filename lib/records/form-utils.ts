@@ -2,6 +2,7 @@ import { diffMins } from "@/lib/utils/format-duration";
 import { formatStoredTimeDisplay } from "@/lib/utils/time-input";
 import type { SessionUser } from "@/lib/auth/constants";
 import { getUserTeamsList } from "@/lib/auth/scoping";
+import { composeRemarkNote } from "@/lib/records/remarks";
 
 export type LogFormState = {
   date: string;
@@ -10,6 +11,8 @@ export type LogFormState = {
   profile: string;
   clientName: string;
   phone: string;
+  /** Predefined remark type. Packed into `note` on save. */
+  remarkCategory: string;
   note: string;
   firstReceive: string;
   firstReply: string;
@@ -30,6 +33,7 @@ export function emptyLogForm(): LogFormState {
     profile: "",
     clientName: "",
     phone: "",
+    remarkCategory: "",
     note: "",
     firstReceive: "",
     firstReply: "",
@@ -262,7 +266,8 @@ export function buildChatRecordFromForm(
   const nowIso = new Date().toISOString();
   const analystLastReply =
     !form.clientLastReply && useFirstReplyAsLast ? form.firstReply : form.analystLastReply;
-  const noteTrim = (form.note || "").trim();
+  const storedNote = composeRemarkNote(form.remarkCategory, form.note);
+  const noteTrim = storedNote.trim();
   const replyDiff = diffMins(form.firstReceive, form.firstReply);
   const totalConv = diffMins(form.firstReceive, analystLastReply);
   return {
@@ -272,7 +277,7 @@ export function buildChatRecordFromForm(
     profile: String(form.profile || "").trim(),
     clientName: String(form.clientName || "").trim(),
     phone: form.phone,
-    note: form.note,
+    note: storedNote,
     firstReceive: form.firstReceive,
     firstReply: form.firstReply,
     clientLastReply: form.clientLastReply,
@@ -290,6 +295,7 @@ export function buildChatRecordFromForm(
     leadNoteUpdatedAt: null,
     leadNoteUpdatedBy: null,
     isLeadNoteOnly: false,
+    amountToPay: "",
     createdBy: recordCreatorLabel(user) || user.email,
   };
 }

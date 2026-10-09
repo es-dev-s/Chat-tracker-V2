@@ -28,16 +28,17 @@ export default async function AppLayout({
   if (pathname && !routeAllowedForRole(pathname, hydrated.role)) {
     redirect(ROUTES.dashboard);
   }
-  const initialWorkspace = await loadWorkspaceBootstrap(hydrated, undefined, {
-    fresh: true,
-  });
+  const initialWorkspace = await loadWorkspaceBootstrap(hydrated);
 
   return (
     <>
       <AuthBootstrap user={hydrated} />
       <AppShell user={hydrated}>
         <WorkspaceSync user={hydrated} initialPayload={initialWorkspace} />
-        <SupabaseRealtimeBridge />
+        <SupabaseRealtimeBridge
+          url={process.env.SUPABASE_URL}
+          anonKey={process.env.SUPABASE_ANON_KEY}
+        />
         {children}
       </AppShell>
     </>

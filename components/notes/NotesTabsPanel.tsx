@@ -7,6 +7,7 @@ import {
   MessageSquareText,
   StickyNote,
   Tag,
+  Trash2,
   X,
 } from "lucide-react";
 import AnalystAvatarCell from "@/components/notes/AnalystAvatarCell";
@@ -15,9 +16,11 @@ import {
   ANALYST_NOTES_PAGE_SIZE,
   paginateRows,
 } from "@/lib/notes/helpers";
+import { acknowledgeChatRecord } from "@/lib/api/mutations";
 import { teamColorFor } from "@/lib/design/colors";
 import { btn, card } from "@/lib/design/control-styles";
 import { displayClient } from "@/lib/records/form-utils";
+import { formatRemarkNoteDisplay } from "@/lib/records/remarks";
 import type { ChatRecord } from "@/lib/db/records";
 import type { WorkspaceUser } from "@/lib/workspace/cache";
 
@@ -84,6 +87,95 @@ function NotePreviewCell({
         <ChevronRight size={14} strokeWidth={2.25} aria-hidden className="ct-notes-note-row__chev" />
       ) : null}
     </button>
+  );
+}
+
+function FollowUpPreviewCell({
+  record,
+  onExpand,
+}: {
+  record: ChatRecord;
+  onExpand: (payload: { title: string; body: string }) => void;
+}) {
+  const session = [record.classSessionDate, record.classSessionTime]
+    .filter(Boolean)
+    .join(" · ");
+  const hasFollowUp = Boolean(
+    record.amountToPay || record.requiredDocuments || session || record.classSessionInstructions,
+  );
+
+  if (!hasFollowUp) return <span className="ct-notes-table__muted">—</span>;
+
+  const detail = [
+    `Amount to pay\n${record.amountToPay || "—"}`,
+    `Required documents\n${record.requiredDocuments || "—"}`,
+    `Class session\n${session || "—"}`,
+    `Instructions\n${record.classSessionInstructions || "—"}`,
+  ].join("\n\n");
+
+  return (
+    <button
+      type="button"
+      className="ct-notes-followup"
+      onClick={() => onExpand({ title: `Follow-up for ${displayClient(record)}`, body: detail })}
+      aria-label={`Read client follow-up for ${displayClient(record)}`}
+    >
+      {record.amountToPay ? (
+        <span className="ct-notes-followup__line">
+          <strong>Amount</strong> {record.amountToPay}
+        </span>
+      ) : null}
+      {record.requiredDocuments ? (
+        <span className="ct-notes-followup__line">
+          <strong>Documents</strong> {record.requiredDocuments}
+        </span>
+      ) : null}
+      {session ? (
+        <span className="ct-notes-followup__line">
+          <strong>Class</strong> {session}
+        </span>
+      ) : null}
+      {record.classSessionInstructions ? (
+        <span className="ct-notes-followup__line">
+          <strong>Instructions</strong> {record.classSessionInstructions}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+function AcknowledgeCell({
+  record,
+  busy,
+  onAcknowledge,
+}: {
+  record: ChatRecord;
+  busy: boolean;
+  onAcknowledge: (record: ChatRecord) => void;
+}) {
+  const acknowledged = Boolean(String(record.acknowledgedAt ?? "").trim());
+  return (
+    <td className="ct-notes-table__ack-cell">
+      <button
+        type="button"
+        className={
+          acknowledged
+            ? "ct-records-table__action-btn ct-records-table__action-btn--ack"
+            : "ct-records-table__action-btn"
+        }
+        disabled={busy}
+        title={
+          acknowledged
+            ? record.acknowledgedBy
+              ? `Acknowledged by ${record.acknowledgedBy}. Click to undo.`
+              : "Acknowledged. Click to undo."
+            : "Mark this record as acknowledged"
+        }
+        onClick={() => onAcknowledge(record)}
+      >
+        {busy ? "Saving…" : acknowledged ? "Acknowledged" : "Acknowledge"}
+      </button>
+    </td>
   );
 }
 
@@ -175,6 +267,10 @@ export default function NotesTabsPanel({
   profileFilterKey = "",
   lockView,
   panelTitle,
+  currentUserEmail,
+  onDeleteMainLeadNote,
+  deletingRecordId,
+  showAcknowledge = false,
 }: {
   analystRows: ChatRecord[];
   mainLeadRows: ChatRecord[];
@@ -188,12 +284,19 @@ export default function NotesTabsPanel({
   lockView?: NotesPanelView;
   /** Optional heading when `lockView` is set (e.g. Important Notes). */
   panelTitle?: string;
+  currentUserEmail?: string;
+  onDeleteMainLeadNote?: (record: ChatRecord) => void;
+  deletingRecordId?: number | null;
+  /** All Leads only. Uses the same record acknowledgement as Records. */
+  showAcknowledge?: boolean;
 }) {
   const [notesPanelView, setNotesPanelView] = useState<NotesPanelView>(
     lockView ?? "analyst",
   );
   const [analystNotesPage, setAnalystNotesPage] = useState(0);
   const [noteDetail, setNoteDetail] = useState<{ title: string; body: string } | null>(null);
+  const [acknowledgingId, setAcknowledgingId] = useState<number | null>(null);
+  const [acknowledgeError, setAcknowledgeError] = useState("");
 
   const activeView = lockView ?? notesPanelView;
 
@@ -218,7 +321,31 @@ export default function NotesTabsPanel({
     return [r.date, r.clientName || displayClient(r), r.analyst].filter(Boolean).join(" · ");
   }
 
+  const acknowledgeRow = async (record: ChatRecord) => {
+    if (acknowledgingId != null) return;
+    const undoing = Boolean(String(record.acknowledgedAt ?? "").trim());
+    setAcknowledgingId(record.id);
+    setAcknowledgeError("");
+    try {
+      await acknowledgeChatRecord(record.id);
+    } catch (e) {
+      setAcknowledgeError(
+        e instanceof Error
+          ? e.message
+          : undoing
+            ? "Could not remove acknowledgement."
+            : "Could not acknowledge this record.",
+      );
+    } finally {
+      setAcknowledgingId(null);
+    }
+  };
+
   const showTabs = !lockView;
+  const columnCount =
+    (activeView === "analyst" ? 6 : 7) +
+    (activeView === "mainLead" && onDeleteMainLeadNote ? 1 : 0) +
+    (showAcknowledge ? 1 : 0);
 
   return (
     <section
@@ -272,6 +399,12 @@ export default function NotesTabsPanel({
         />
       ) : null}
 
+      {showAcknowledge && acknowledgeError ? (
+        <p className="ct-notes-ack-error" role="alert">
+          {acknowledgeError}
+        </p>
+      ) : null}
+
       <div className="ct-notes-table-scroll">
         <table className="ct-notes-table">
           <colgroup>
@@ -281,6 +414,13 @@ export default function NotesTabsPanel({
             <col className="ct-notes-col ct-notes-col--client" />
             <col className="ct-notes-col ct-notes-col--analyst" />
             <col className="ct-notes-col ct-notes-col--note" />
+            {activeView === "mainLead" ? (
+              <col className="ct-notes-col ct-notes-col--followup" />
+            ) : null}
+            {activeView === "mainLead" && onDeleteMainLeadNote ? (
+              <col className="ct-notes-col ct-notes-col--actions" />
+            ) : null}
+            {showAcknowledge ? <col className="ct-notes-col ct-notes-col--ack" /> : null}
           </colgroup>
           <thead>
             <tr>
@@ -290,12 +430,17 @@ export default function NotesTabsPanel({
               <th>{activeView === "analyst" ? "Client name" : "Client"}</th>
               <th>Analyst</th>
               <th>{activeView === "analyst" ? "Analyst Note" : "Main Lead Note"}</th>
+              {activeView === "mainLead" ? <th>Follow-up</th> : null}
+              {activeView === "mainLead" && onDeleteMainLeadNote ? (
+                <th className="ct-notes-table__action-heading">Action</th>
+              ) : null}
+              {showAcknowledge ? <th className="ct-notes-table__ack-heading">Acknowledge</th> : null}
             </tr>
           </thead>
           <tbody>
             {displayRows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="ct-notes-table__empty">
+                <td colSpan={columnCount} className="ct-notes-table__empty">
                   {activeView === "analyst" ? analystEmptyMessage : mainLeadEmptyMessage}
                 </td>
               </tr>
@@ -315,11 +460,18 @@ export default function NotesTabsPanel({
                   </td>
                   <td className="ct-notes-table__note">
                     <NotePreviewCell
-                      text={r.note || ""}
+                      text={formatRemarkNoteDisplay(r.note || "")}
                       contextLabel={noteContext(r)}
                       onExpand={setNoteDetail}
                     />
                   </td>
+                  {showAcknowledge ? (
+                    <AcknowledgeCell
+                      record={r}
+                      busy={acknowledgingId === r.id}
+                      onAcknowledge={(row) => void acknowledgeRow(row)}
+                    />
+                  ) : null}
                 </tr>
               ))
             ) : (
@@ -343,6 +495,36 @@ export default function NotesTabsPanel({
                       onExpand={setNoteDetail}
                     />
                   </td>
+                  <td className="ct-notes-table__followup">
+                    <FollowUpPreviewCell record={r} onExpand={setNoteDetail} />
+                  </td>
+                  {onDeleteMainLeadNote ? (
+                    <td className="ct-notes-table__action-cell">
+                      {currentUserEmail &&
+                      (r.leadNoteUpdatedBy || "").trim().toLowerCase() ===
+                        currentUserEmail.trim().toLowerCase() ? (
+                        <button
+                          type="button"
+                          className="ct-notes-delete-btn"
+                          onClick={() => onDeleteMainLeadNote(r)}
+                          disabled={deletingRecordId === r.id}
+                          aria-label={`Delete note for ${displayClient(r)}`}
+                          title="Delete this note"
+                        >
+                          <Trash2 size={15} strokeWidth={2} aria-hidden />
+                        </button>
+                      ) : (
+                        <span className="ct-notes-table__muted">—</span>
+                      )}
+                    </td>
+                  ) : null}
+                  {showAcknowledge ? (
+                    <AcknowledgeCell
+                      record={r}
+                      busy={acknowledgingId === r.id}
+                      onAcknowledge={(row) => void acknowledgeRow(row)}
+                    />
+                  ) : null}
                 </tr>
               ))
             )}

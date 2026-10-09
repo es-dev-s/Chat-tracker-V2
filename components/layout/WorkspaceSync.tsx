@@ -331,6 +331,9 @@ export default function WorkspaceSync({
       if (document.visibilityState === "visible") scheduleSync(true);
     };
     const onReconnect = () => scheduleSync(false, true, true);
+    const onFocus = () => {
+      if (document.visibilityState === "visible") scheduleSync(true);
+    };
     const onMutationSync = (event: Event) => {
       const detail = (event as CustomEvent<WorkspaceSyncDetail>).detail;
       scheduleSync(
@@ -342,7 +345,7 @@ export default function WorkspaceSync({
 
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("online", onReconnect);
-    window.addEventListener("focus", onReconnect);
+    window.addEventListener("focus", onFocus);
     window.addEventListener(WORKSPACE_SYNC_EVENT, onMutationSync);
 
     return () => {
@@ -352,7 +355,7 @@ export default function WorkspaceSync({
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", onReconnect);
-      window.removeEventListener("focus", onReconnect);
+      window.removeEventListener("focus", onFocus);
       window.removeEventListener(WORKSPACE_SYNC_EVENT, onMutationSync);
     };
   }, [user.id, user.email]);

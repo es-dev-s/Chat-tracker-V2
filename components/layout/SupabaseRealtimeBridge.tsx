@@ -2,7 +2,11 @@
 
 import { useEffect, useRef } from "react";
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
-import { requestWorkspaceSync } from "@/lib/workspace/sync-events";
+import {
+  ACK_REALTIME_EVENT,
+  ACK_REALTIME_TOPIC,
+} from "@/lib/realtime/acknowledgement-channel";
+import { useWorkspaceStore } from "@/store/workspace-store";
 
 type RealtimeNode = {
   id: "primary" | "secondary";
@@ -10,10 +14,16 @@ type RealtimeNode = {
   anonKey: string;
 };
 
-function readRealtimeNodes(): RealtimeNode[] {
+type AcknowledgementPayload = {
+  id?: number;
+  acknowledgedAt?: string | null;
+  acknowledgedBy?: string | null;
+};
+
+function readRealtimeNodes(url?: string, anonKey?: string): RealtimeNode[] {
   const nodes: RealtimeNode[] = [];
-  const primaryUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const primaryKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  const primaryUrl = (url || process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
+  const primaryKey = (anonKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
   if (primaryUrl && primaryKey) {
     nodes.push({ id: "primary", url: primaryUrl, anonKey: primaryKey });
   }
@@ -25,17 +35,35 @@ function readRealtimeNodes(): RealtimeNode[] {
   return nodes;
 }
 
+function applyAcknowledgement(payload: AcknowledgementPayload | undefined) {
+  const id = Number(payload?.id);
+  if (!Number.isFinite(id) || id <= 0) return;
+  useWorkspaceStore
+    .getState()
+    .patchRecordAcknowledgement(
+      id,
+      payload?.acknowledgedAt ?? null,
+      payload?.acknowledgedBy ?? null,
+    );
+}
+
 /**
- * Optional Supabase Realtime bridge — instant workspace refresh on record changes.
- * Set NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY (and secondary pair for failover).
+ * Paints acknowledgement changes on every open Records screen as soon as
+ * another session saves them.
  */
-export default function SupabaseRealtimeBridge() {
+export default function SupabaseRealtimeBridge({
+  url,
+  anonKey,
+}: {
+  url?: string;
+  anonKey?: string;
+}) {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const clientRef = useRef<SupabaseClient | null>(null);
   const nodeIndexRef = useRef(0);
 
   useEffect(() => {
-    const nodes = readRealtimeNodes();
+    const nodes = readRealtimeNodes(url, anonKey);
     if (!nodes.length) return;
 
     let cancelled = false;
@@ -60,14 +88,10 @@ export default function SupabaseRealtimeBridge() {
       nodeIndexRef.current = index;
 
       const channel = client
-        .channel(`ct-records-${node.id}`)
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "chat_records" },
-          () => {
-            requestWorkspaceSync(true, true);
-          },
-        )
+        .channel(ACK_REALTIME_TOPIC)
+        .on("broadcast", { event: ACK_REALTIME_EVENT }, ({ payload }) => {
+          applyAcknowledgement(payload as AcknowledgementPayload);
+        })
         .subscribe((status) => {
           if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
             const next = (nodeIndexRef.current + 1) % nodes.length;
@@ -86,7 +110,7 @@ export default function SupabaseRealtimeBridge() {
       cancelled = true;
       cleanup();
     };
-  }, []);
+  }, [url, anonKey]);
 
   return null;
 }

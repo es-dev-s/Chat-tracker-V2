@@ -10,6 +10,11 @@ export const MAIN_TEAM_LEAD_PATCHABLE_FIELDS = new Set([
   "leadNote",
   "leadNoteUpdatedAt",
   "leadNoteUpdatedBy",
+  "amountToPay",
+  "requiredDocuments",
+  "classSessionDate",
+  "classSessionTime",
+  "classSessionInstructions",
 ]);
 
 type RecordRow = Record<string, unknown>;
@@ -68,6 +73,33 @@ function mainTeamLeadPatchAllowed(
   const rowTeam = String(row.team ?? "").trim().toLowerCase();
   const exTeam = String(existingRow.team ?? "").trim().toLowerCase();
   if (rowTeam !== exTeam) return { ok: false, code: "FIELD_FORBIDDEN" };
+  const existingNote = String(existingRow.leadNote ?? "").trim();
+  const noteOwner = String(existingRow.leadNoteUpdatedBy ?? "").trim().toLowerCase();
+  const viewerEmail = String(viewer.email ?? "").trim().toLowerCase();
+  const leadNoteFields = [
+    "leadNote",
+    "leadNoteUpdatedAt",
+    "leadNoteUpdatedBy",
+    "amountToPay",
+    "requiredDocuments",
+    "classSessionDate",
+    "classSessionTime",
+    "classSessionInstructions",
+  ];
+  if (
+    existingNote &&
+    leadNoteFields.some((field) => recordFieldChanged(row[field], existingRow[field])) &&
+    (!viewerEmail || noteOwner !== viewerEmail)
+  ) {
+    return { ok: false, code: "FIELD_FORBIDDEN" };
+  }
+  if (
+    existingNote &&
+    !String(row.leadNote ?? "").trim() &&
+    noteOwner !== viewerEmail
+  ) {
+    return { ok: false, code: "FIELD_FORBIDDEN" };
+  }
   const keys = new Set([...Object.keys(row), ...Object.keys(existingRow)]);
   for (const k of keys) {
     if (k === "id") continue;
@@ -121,6 +153,14 @@ export function viewerMayDeleteChatRecord(
   row: RecordRow,
 ): boolean {
   if (!viewer?.role || !row) return false;
+  if (viewer.role === "mainTeamLead") {
+    const email = String(viewer.email ?? "").trim().toLowerCase();
+    return Boolean(
+      email &&
+        row.isLeadNoteOnly &&
+        String(row.leadNoteUpdatedBy ?? "").trim().toLowerCase() === email,
+    );
+  }
   if (viewer.role !== "teamLead") return false;
   if (isUnrestrictedTeamLead(viewer)) return true;
   return viewerTeamLcSet(viewer).has(String(row.team ?? "").trim().toLowerCase());

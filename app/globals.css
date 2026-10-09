@@ -3123,7 +3123,8 @@ input:focus-visible {
   text-align: right;
 }
 
-.ct-records-table thead th.ct-records-table__col-status {
+.ct-records-table thead th.ct-records-table__col-status,
+.ct-records-table thead th.ct-records-table__col-ack {
   text-align: center;
 }
 
@@ -3143,12 +3144,22 @@ input:focus-visible {
   white-space: nowrap;
 }
 
-.ct-records-table__col-status {
+.ct-records-table__col-status,
+.ct-records-table__col-ack {
   text-align: center;
+  white-space: nowrap;
 }
 
 .ct-records-table__col-status > span {
   display: inline-flex;
+}
+
+.ct-records-ledger__ack-error {
+  display: block;
+  margin-top: 6px;
+  color: #b91c1c;
+  font-size: 12.5px;
+  font-weight: 600;
 }
 
 .ct-records-table__col-actions {
@@ -3242,6 +3253,20 @@ input:focus-visible {
 .ct-records-table__action-btn--danger:hover:not(:disabled) {
   background: #fef2f2;
   border-color: #fecaca;
+}
+
+.ct-records-table__action-btn.ct-records-table__action-btn--ack {
+  color: #ffffff;
+  background: #16a34a;
+  border-color: #15803d;
+  box-shadow: none;
+}
+
+.ct-records-table__action-btn.ct-records-table__action-btn--ack:hover:not(:disabled) {
+  color: #ffffff;
+  background: #15803d;
+  border-color: #166534;
+  box-shadow: none;
 }
 
 /* Shared table pagination */
@@ -3585,6 +3610,18 @@ button:disabled {
   width: auto;
 }
 
+.ct-notes-col--followup {
+  width: 260px;
+}
+
+.ct-notes-col--actions {
+  width: 58px;
+}
+
+.ct-notes-col--ack {
+  width: 148px;
+}
+
 .ct-notes-table thead th {
   position: sticky;
   top: 0;
@@ -3668,6 +3705,97 @@ button:disabled {
 
 .ct-notes-table__note {
   min-width: 200px;
+}
+
+.ct-notes-table__followup {
+  min-width: 220px;
+  max-width: 300px;
+}
+
+.ct-notes-followup {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ct-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ct-notes-followup:hover .ct-notes-followup__line {
+  color: var(--ct-accent);
+}
+
+.ct-notes-followup:focus-visible {
+  outline: 2px solid var(--ct-accent);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+.ct-notes-followup__line {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.ct-notes-followup__line strong {
+  color: var(--ct-muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.ct-notes-table__action-heading,
+.ct-notes-table__action-cell {
+  width: 58px;
+  text-align: center !important;
+}
+
+.ct-notes-table__ack-heading,
+.ct-notes-table__ack-cell {
+  text-align: center !important;
+  white-space: nowrap;
+}
+
+.ct-notes-ack-error {
+  margin: 0 0 10px;
+  color: #b91c1c;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.ct-notes-delete-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ct-muted);
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+}
+
+.ct-notes-delete-btn:hover:not(:disabled) {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.ct-notes-delete-btn:focus-visible {
+  outline: 2px solid var(--ct-accent);
+  outline-offset: 2px;
+}
+
+.ct-notes-delete-btn:disabled {
+  cursor: wait;
+  opacity: 0.5;
 }
 
 .ct-notes-table__muted {
@@ -4363,33 +4491,148 @@ button:disabled {
 }
 
 .ct-lead-note-form-card {
-  padding: 20px 24px;
+  padding: 22px 24px 24px;
   margin-bottom: 14px;
+}
+
+.ct-lead-note-form-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 18px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--ct-border-subtle);
+}
+
+.ct-lead-note-form-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ct-lead-note-form-mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border: 1px solid var(--ct-border-subtle);
+  border-radius: 12px;
+  background: var(--ct-surface-soft);
+  color: var(--ct-accent);
+}
+
+.ct-lead-note-form-head .ct-section-title {
+  margin: 0;
+  font-size: 17px;
+}
+
+.ct-lead-note-form-tag {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border: 1px solid var(--ct-border-subtle);
+  border-radius: 6px;
+  background: var(--ct-surface-soft);
+  color: var(--ct-muted);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .ct-lead-note-form-copy {
   color: var(--ct-muted);
-  font-size: 12.5px;
-  margin: 0 0 12px;
+  font-size: 12px;
+  margin: 4px 0 0;
   line-height: 1.45;
 }
 
 .ct-lead-note-form-grid {
   display: grid;
-  grid-template-columns: minmax(180px, 1.1fr) 1fr 1fr minmax(200px, 2fr) auto;
-  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px 18px;
   align-items: end;
 }
 
-.ct-lead-note-textarea {
-  min-height: 42px;
+.ct-lead-note-form-grid .ct-field-label {
+  margin-bottom: 0;
+}
+
+.ct-lead-note-form-grid .ct-input {
+  box-sizing: border-box;
+}
+
+.ct-lead-note-form-grid .ct-input:not(textarea) {
   height: 42px;
-  resize: none;
+  min-height: 42px;
+}
+
+.ct-lead-note-form-grid select.ct-input {
+  padding-right: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 14px;
+}
+
+.ct-lead-note-form-grid input[type="date"],
+.ct-lead-note-form-grid input[type="time"] {
+  padding-right: 12px;
+}
+
+.ct-lead-note-textarea {
+  min-height: 96px;
+  height: auto;
+  resize: vertical;
+}
+
+.ct-lead-note-field--full {
+  grid-column: 1 / -1;
+}
+
+.ct-lead-note-section-title {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 16px;
+  margin-top: 2px;
+  border-top: 1px solid var(--ct-border-subtle);
+  color: var(--ct-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ct-lead-note-section-caption {
+  color: var(--ct-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.ct-lead-note-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 2px;
 }
 
 .ct-lead-note-submit {
-  padding: 10px 16px;
-  min-height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 148px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0 18px;
+}
+
+@media (max-width: 1080px) and (min-width: 901px) {
+  .ct-lead-note-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* Admin toolbar — Add User, Manage Profiles, Manage Teams */
@@ -5491,6 +5734,38 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
+  .ct-lead-note-field--full,
+  .ct-lead-note-section-title,
+  .ct-lead-note-actions {
+    grid-column: 1;
+  }
+
+  .ct-lead-note-actions {
+    justify-content: stretch;
+  }
+
+  .ct-lead-note-submit {
+    width: 100%;
+  }
+
+  .ct-lead-note-form-card {
+    padding: 18px 16px;
+  }
+
+  .ct-lead-note-form-head {
+    align-items: flex-start;
+  }
+
+  .ct-lead-note-form-tag {
+    margin-top: 4px;
+  }
+
+  .ct-lead-note-section-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
   .ct-notes-toolbar-row {
     flex-direction: column;
     align-items: stretch;
@@ -6220,6 +6495,34 @@ button:disabled {
 
 .ct-log-time-metric--reply-diff .ct-log-time-metric__value {
   color: #15803d;
+}
+
+/* Remark type menu — always-visible slim scrollbar so the list reads as scrollable. */
+.ct-select-menu-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #c5d4e8 transparent;
+}
+
+.ct-select-menu-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+
+.ct-select-menu-scroll::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 6px 0;
+}
+
+.ct-select-menu-scroll::-webkit-scrollbar-thumb {
+  background-color: #c5d4e8;
+  border: 3px solid transparent;
+  border-radius: 99px;
+  background-clip: padding-box;
+}
+
+.ct-select-menu-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+  border: 3px solid transparent;
+  background-clip: padding-box;
 }
 
 /* —— Log chat outcomes —— */

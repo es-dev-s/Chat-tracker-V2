@@ -2,11 +2,14 @@
 
 import { useMemo, useState } from "react";
 import NotesTabsPanel from "@/components/notes/NotesTabsPanel";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { BusyLabel } from "@/components/ui/BusySpinner";
+import { Plus, StickyNote } from "lucide-react";
 import { LeadNotesPageSkeleton } from "@/components/ui/WorkspaceSkeletons";
 import {
   patchChatRecord,
   postChatRecord,
+  deleteChatRecord,
   refreshWorkspaceAfterMutation,
 } from "@/lib/api/mutations";
 import { filterRecordsForViewer } from "@/lib/auth/scoping";
@@ -20,6 +23,7 @@ import {
   recordCreatorLabel,
   todayIso,
 } from "@/lib/records/form-utils";
+import { AMOUNT_TO_PAY_MAX_LEN, normalizeAmountToPay } from "@/lib/records/amount";
 import type { ChatRecord } from "@/lib/db/records";
 import { useAuthStore } from "@/store/auth-store";
 import { useWorkspaceStore } from "@/store/workspace-store";
@@ -36,9 +40,17 @@ export default function LeadNotesView() {
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [note, setNote] = useState("");
+  const [amountToPay, setAmountToPay] = useState("");
+  const [requiredDocuments, setRequiredDocuments] = useState("");
+  const [classSessionDate, setClassSessionDate] = useState("");
+  const [classSessionTime, setClassSessionTime] = useState("");
+  const [classSessionInstructions, setClassSessionInstructions] = useState("");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ChatRecord | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   const visibleRecords = useMemo(
     () => filterRecordsForViewer(user!, records) as ChatRecord[],
@@ -57,12 +69,45 @@ export default function LeadNotesView() {
     [filteredRecords],
   );
 
+  const confirmDeleteNote = async () => {
+    if (!deleteTarget) return;
+    setDeleteBusy(true);
+    setDeleteError("");
+    try {
+      if (deleteTarget.isLeadNoteOnly) {
+        await deleteChatRecord(deleteTarget.id);
+      } else {
+        await patchChatRecord({
+          ...deleteTarget,
+          leadNote: "",
+          leadNoteUpdatedAt: null,
+          leadNoteUpdatedBy: null,
+          amountToPay: "",
+          requiredDocuments: "",
+          classSessionDate: "",
+          classSessionTime: "",
+          classSessionInstructions: "",
+        });
+      }
+      setDeleteTarget(null);
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : "Could not delete note.");
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
   const addMainTeamLeadNote = async () => {
     if (!user) return;
     const trimmedClientName = clientName.trim();
     const trimmedClientPhone = clientPhone.trim();
     const trimmedNote = note.trim();
     const trimmedProfilePick = profilePick.trim();
+    const trimmedAmount = normalizeAmountToPay(amountToPay);
+    const trimmedRequiredDocuments = requiredDocuments.trim();
+    const trimmedClassSessionDate = classSessionDate.trim();
+    const trimmedClassSessionTime = classSessionTime.trim();
+    const trimmedClassSessionInstructions = classSessionInstructions.trim();
 
     if (!trimmedNote) {
       setError("Note text is required.");
@@ -87,15 +132,18 @@ export default function LeadNotesView() {
       }
 
       const baseList = useWorkspaceStore.getState().records;
-      const matching = matchRecordsForMainLeadNote(baseList, {
+      const nowIso = new Date().toISOString();
+      const byEmail = user.email || "main-team-lead";
+      const matchingCandidates = matchRecordsForMainLeadNote(baseList, {
         team,
         profilePick: trimmedProfilePick,
         clientName: trimmedClientName,
         clientPhone: trimmedClientPhone,
       });
-
-      const nowIso = new Date().toISOString();
-      const byEmail = user.email || "main-team-lead";
+      const matching = matchingCandidates.filter((record) => {
+        if (!(record.leadNote || "").trim()) return true;
+        return (record.leadNoteUpdatedBy || "").trim().toLowerCase() === byEmail.toLowerCase();
+      });
 
       if (matching.length) {
         await Promise.all(
@@ -105,6 +153,12 @@ export default function LeadNotesView() {
               leadNote: trimmedNote,
               leadNoteUpdatedAt: nowIso,
               leadNoteUpdatedBy: byEmail,
+              amountToPay: trimmedAmount || r.amountToPay || "",
+              requiredDocuments: trimmedRequiredDocuments || r.requiredDocuments || "",
+              classSessionDate: trimmedClassSessionDate || r.classSessionDate || "",
+              classSessionTime: trimmedClassSessionTime || r.classSessionTime || "",
+              classSessionInstructions:
+                trimmedClassSessionInstructions || r.classSessionInstructions || "",
             }),
           ),
         );
@@ -119,6 +173,11 @@ export default function LeadNotesView() {
           clientName: clientNameStored,
           phone: trimmedClientPhone,
           note: "",
+          amountToPay: trimmedAmount,
+          requiredDocuments: trimmedRequiredDocuments,
+          classSessionDate: trimmedClassSessionDate,
+          classSessionTime: trimmedClassSessionTime,
+          classSessionInstructions: trimmedClassSessionInstructions,
           leadNote: trimmedNote,
           leadNoteUpdatedAt: nowIso,
           leadNoteUpdatedBy: byEmail,
@@ -147,6 +206,11 @@ export default function LeadNotesView() {
       setClientPhone("");
       setProfilePick("");
       setNote("");
+      setAmountToPay("");
+      setRequiredDocuments("");
+      setClassSessionDate("");
+      setClassSessionTime("");
+      setClassSessionInstructions("");
       setSaved(true);
       window.setTimeout(() => setSaved(false), 2000);
     } catch (e) {
@@ -176,13 +240,18 @@ export default function LeadNotesView() {
             </span>
           </div>
         ) : null}
-        <div className="ct-section-title">Add Note For Chat Analyst</div>
-        <p className="ct-lead-note-form-copy">
-          Add note for a client in your team. This will be visible to Chat Analyst
-          Team Lead and Chat Analyst. You can pick a catalog profile from teammates
-          on your teams (optional) and/or use client name or number — matching and
-          new rows use the same chat record fields as before.
-        </p>
+        <div className="ct-lead-note-form-head">
+          <div className="ct-lead-note-form-heading">
+            <span className="ct-lead-note-form-mark" aria-hidden>
+              <StickyNote size={19} strokeWidth={2} />
+            </span>
+            <div>
+              <div className="ct-section-title">Add Note For Chat Analyst</div>
+              <p className="ct-lead-note-form-copy">Client details and follow-up</p>
+            </div>
+          </div>
+          <span className="ct-lead-note-form-tag">TEAM LEAD</span>
+        </div>
         <div className="ct-lead-note-form-grid">
           <div className="ct-filter-field">
             <div className="ct-field-label">Profile (from team members)</div>
@@ -223,6 +292,17 @@ export default function LeadNotesView() {
             />
           </div>
           <div className="ct-filter-field">
+            <div className="ct-field-label">Amount to be paid</div>
+            <input
+              className="ct-input"
+              value={amountToPay}
+              onChange={(e) => setAmountToPay(e.target.value)}
+              maxLength={AMOUNT_TO_PAY_MAX_LEN}
+              placeholder="e.g. Rs. 50,000"
+              inputMode="decimal"
+            />
+          </div>
+          <div className="ct-filter-field ct-lead-note-field--full">
             <div className="ct-field-label">Note</div>
             <textarea
               className="ct-input ct-lead-note-textarea"
@@ -231,15 +311,66 @@ export default function LeadNotesView() {
               placeholder="Enter note for this client"
             />
           </div>
-          <button
-            type="button"
-            className="ct-btn-primary ct-lead-note-submit"
-            onClick={() => void addMainTeamLeadNote()}
-            disabled={saving}
-            aria-busy={saving || undefined}
-          >
-            {saving ? <BusyLabel label="Saving note…" /> : "Add Note"}
-          </button>
+          <div className="ct-lead-note-section-title">
+            <span>Client follow-up</span>
+            <span className="ct-lead-note-section-caption">Documents and class session</span>
+          </div>
+          <div className="ct-filter-field ct-lead-note-field--full">
+            <div className="ct-field-label">Required documents</div>
+            <textarea
+              className="ct-input ct-lead-note-textarea"
+              value={requiredDocuments}
+              onChange={(e) => setRequiredDocuments(e.target.value)}
+              maxLength={1000}
+              placeholder="List documents the client needs to provide"
+            />
+          </div>
+          <div className="ct-filter-field">
+            <div className="ct-field-label">Session date</div>
+            <input
+              type="date"
+              className="ct-input"
+              value={classSessionDate}
+              onChange={(e) => setClassSessionDate(e.target.value)}
+            />
+          </div>
+          <div className="ct-filter-field">
+            <div className="ct-field-label">Session time</div>
+            <input
+              type="time"
+              className="ct-input"
+              value={classSessionTime}
+              onChange={(e) => setClassSessionTime(e.target.value)}
+            />
+          </div>
+          <div className="ct-filter-field ct-lead-note-field--full">
+            <div className="ct-field-label">Session instructions</div>
+            <textarea
+              className="ct-input ct-lead-note-textarea"
+              value={classSessionInstructions}
+              onChange={(e) => setClassSessionInstructions(e.target.value)}
+              maxLength={1000}
+              placeholder="Optional details or instructions for the client"
+            />
+          </div>
+          <div className="ct-lead-note-actions">
+            <button
+              type="button"
+              className="ct-btn-primary ct-lead-note-submit"
+              onClick={() => void addMainTeamLeadNote()}
+              disabled={saving}
+              aria-busy={saving || undefined}
+            >
+              {saving ? (
+                <BusyLabel label="Saving note…" />
+              ) : (
+                <>
+                  <Plus size={16} strokeWidth={2.2} aria-hidden />
+                  Add Note
+                </>
+              )}
+            </button>
+          </div>
         </div>
         {saved ? <div className="ct-form-success">Note added.</div> : null}
         {error ? <div className="ct-field-error">{error}</div> : null}
@@ -252,7 +383,36 @@ export default function LeadNotesView() {
         lockView="mainLead"
         panelTitle="Important Notes"
         mainLeadEmptyMessage="No main team lead notes added yet."
+        currentUserEmail={user.email || ""}
+        onDeleteMainLeadNote={(record) => {
+          setDeleteError("");
+          setDeleteTarget(record);
+        }}
+        deletingRecordId={deleteBusy ? deleteTarget?.id : null}
       />
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Delete this note?"
+        confirmLabel="Delete note"
+        cancelLabel="Keep note"
+        danger
+        busy={deleteBusy}
+        busyLabel="Deleting…"
+        error={deleteError}
+        onCancel={() => {
+          if (!deleteBusy) {
+            setDeleteTarget(null);
+            setDeleteError("");
+          }
+        }}
+        onConfirm={() => void confirmDeleteNote()}
+        titleId="ct-lead-note-delete-title"
+      >
+        {deleteTarget?.isLeadNoteOnly
+          ? "This removes the note and its standalone row. This action cannot be undone."
+          : "This removes your note and its follow-up details. The chat record itself will remain."}
+      </ConfirmDialog>
     </div>
   );
 }

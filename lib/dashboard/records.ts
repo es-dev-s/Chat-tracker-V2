@@ -48,6 +48,7 @@ export function recordMatchesDashboardSearch(
     record?.note,
     record?.leadNote,
     record?.phone,
+    record?.amountToPay,
     record?.date,
     record?.firstReceive,
     record?.firstReply,

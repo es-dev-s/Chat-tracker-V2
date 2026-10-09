@@ -16,6 +16,12 @@ export type ChatRecord = {
   clientName: string;
   phone: string;
   note: string;
+  /** Payment follow-up amount to be paid. Empty when none. */
+  amountToPay: string;
+  requiredDocuments?: string;
+  classSessionDate?: string;
+  classSessionTime?: string;
+  classSessionInstructions?: string;
   firstReceive: string;
   firstReply: string;
   clientLastReply: string;
@@ -35,6 +41,9 @@ export type ChatRecord = {
   leadNoteUpdatedAt: string | null;
   leadNoteUpdatedBy: string | null;
   isLeadNoteOnly: boolean;
+  /** Set when a main team lead acknowledges the row. Null until then. */
+  acknowledgedAt?: string | null;
+  acknowledgedBy?: string | null;
   createdBy: string;
   updatedAt?: string | null;
 };
@@ -50,6 +59,11 @@ function dbChatRowToApp(row: Record<string, unknown>): ChatRecord | null {
     clientName: String(row.client_name ?? ""),
     phone: String(row.phone ?? ""),
     note: String(row.note ?? ""),
+    amountToPay: String(row.amount_to_pay ?? ""),
+    requiredDocuments: String(row.required_documents ?? ""),
+    classSessionDate: String(row.class_session_date ?? ""),
+    classSessionTime: String(row.class_session_time ?? ""),
+    classSessionInstructions: String(row.class_session_instructions ?? ""),
     firstReceive: String(row.first_receive ?? ""),
     firstReply: String(row.first_reply ?? ""),
     clientLastReply: String(row.client_last_reply ?? ""),
@@ -69,13 +83,15 @@ function dbChatRowToApp(row: Record<string, unknown>): ChatRecord | null {
     leadNoteUpdatedBy:
       row.lead_note_updated_by != null ? String(row.lead_note_updated_by) : null,
     isLeadNoteOnly: Boolean(row.is_lead_note_only),
+    acknowledgedAt: row.acknowledged_at != null ? String(row.acknowledged_at) : null,
+    acknowledgedBy: row.acknowledged_by != null ? String(row.acknowledged_by) : null,
     createdBy: String(row.created_by ?? ""),
     updatedAt: row.updated_at != null ? String(row.updated_at) : null,
   };
 }
 
 const FINGERPRINT_COLUMNS =
-  "id,date,analyst,team,received,attempted,resolved,reply_diff,total_conv,first_receive,first_reply,note_updated_at,lead_note_updated_at";
+  "id,date,analyst,team,received,attempted,resolved,reply_diff,total_conv,first_receive,first_reply,note_updated_at,lead_note_updated_at,amount_to_pay,required_documents,class_session_date,class_session_time,class_session_instructions";
 
 function dbFingerprintRow(row: Record<string, unknown>) {
   if (row == null || row.id == null) return null;
@@ -94,6 +110,11 @@ function dbFingerprintRow(row: Record<string, unknown>) {
     noteUpdatedAt: row.note_updated_at != null ? String(row.note_updated_at) : null,
     leadNoteUpdatedAt:
       row.lead_note_updated_at != null ? String(row.lead_note_updated_at) : null,
+    amountToPay: String(row.amount_to_pay ?? ""),
+    requiredDocuments: String(row.required_documents ?? ""),
+    classSessionDate: String(row.class_session_date ?? ""),
+    classSessionTime: String(row.class_session_time ?? ""),
+    classSessionInstructions: String(row.class_session_instructions ?? ""),
   };
 }
 
@@ -120,10 +141,22 @@ async function paginateScopedRows(
     }
 
     const PAGE_SIZE = 1000;
-    const rows: Record<string, unknown>[] = [];
-    let from = 0;
+    let countQuery = sb
+      .from("chat_records")
+      .select("id", { count: "exact", head: true });
+    countQuery = applyRecordScopeToQuery(countQuery as never, viewer) as typeof countQuery;
+    const countRes = await countQuery;
+    throwIfRetryableSupabaseError(countRes.error, countRes.status, "read chat_records");
+    if (countRes.error) {
+      throw new Error(`read chat_records: ${countRes.error.message}`);
+    }
 
-    while (true) {
+    const total = countRes.count ?? 0;
+    if (total <= 0) return [];
+
+    const pageCount = Math.ceil(total / PAGE_SIZE);
+    const readPage = async (page: number) => {
+      const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
       let query = sb
         .from("chat_records")
@@ -136,12 +169,19 @@ async function paginateScopedRows(
       if (res.error) {
         throw new Error(`read chat_records: ${res.error.message}`);
       }
-      const chunk = Array.isArray(res.data) ? res.data : [];
-      rows.push(...(chunk as unknown as Record<string, unknown>[]));
-      if (chunk.length < PAGE_SIZE) break;
-      from += PAGE_SIZE;
-    }
+      return Array.isArray(res.data) ? (res.data as unknown as Record<string, unknown>[]) : [];
+    };
 
+    const CONCURRENCY = 4;
+    const rows: Record<string, unknown>[] = [];
+    for (let start = 0; start < pageCount; start += CONCURRENCY) {
+      const pages = [];
+      for (let page = start; page < Math.min(pageCount, start + CONCURRENCY); page += 1) {
+        pages.push(readPage(page));
+      }
+      const chunks = await Promise.all(pages);
+      for (const chunk of chunks) rows.push(...chunk);
+    }
     return rows;
   });
 }

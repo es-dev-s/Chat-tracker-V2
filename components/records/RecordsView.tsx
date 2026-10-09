@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { C, RAD, SANS, TYPE } from "@/lib/design/tokens";
 import { teamColorFor } from "@/lib/design/colors";
-import { deleteChatRecord, patchChatRecord } from "@/lib/api/mutations";
+import { acknowledgeChatRecord, deleteChatRecord, patchChatRecord } from "@/lib/api/mutations";
 import {
   getLogChatTimeFieldErrors,
   isValidRecordTime,
@@ -16,6 +16,8 @@ import { badgeStyle, btnStyle, cardStyle, inputStyle } from "@/lib/styles/contro
 import { BusyLabel } from "@/components/ui/BusySpinner";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { displayClient } from "@/lib/records/form-utils";
+import { composeRemarkNote, parseRemarkNote } from "@/lib/records/remarks";
+import LogRemarksFields from "@/components/log/LogRemarksFields";
 import type { ChatRecord } from "@/lib/db/records";
 import { useAuthStore } from "@/store/auth-store";
 import { useWorkspaceStore } from "@/store/workspace-store";
@@ -85,6 +87,11 @@ const LEDGER_HEADERS: { label: string; className?: string }[] = [
   { label: "Actions", className: "ct-records-table__col-actions" },
 ];
 
+const ACK_HEADER = {
+  label: "Acknowledge",
+  className: "ct-records-table__col-ack",
+} as const;
+
 function LedgerTextCell({ value }: { value: string }) {
   const label = (value || "—").trim() || "—";
   return (
@@ -112,11 +119,25 @@ export default function RecordsView() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [detailId, setDetailId] = useState<number | null>(null);
+  const [acknowledgingId, setAcknowledgingId] = useState<number | null>(null);
+  const [acknowledgeError, setAcknowledgeError] = useState("");
   const scrollAnchorRef = useRef<number | null>(null);
 
   const role = user?.role ?? "analyst";
   const canDeleteRecords = role === "teamLead";
   const canUpdateRecords = role === "teamLead" || role === "analyst";
+  const showRowActions = canUpdateRecords || canDeleteRecords;
+  const showAckColumn =
+    role === "mainTeamLead" || (role === "teamLead" && user?.isAdmin === true);
+  const ledgerHeaders = (() => {
+    const headers = showRowActions
+      ? [...LEDGER_HEADERS]
+      : LEDGER_HEADERS.filter((header) => header.label !== "Actions");
+    if (!showAckColumn) return headers;
+    const statusIndex = headers.findIndex((header) => header.label === "Status");
+    headers.splice(statusIndex + 1, 0, ACK_HEADER);
+    return headers;
+  })();
 
   const filtered = useFilteredRecords(records);
 
@@ -190,6 +211,9 @@ export default function RecordsView() {
     [editForm, editUseFirstReplyAsLast],
   );
   const hasEditTimeOrderError = Object.keys(editTimeFieldErrors).length > 0;
+  const editRemarks = editForm
+    ? parseRemarkNote(editForm.note || "")
+    : { category: "", details: "" };
 
   const setEditF = <K extends keyof ChatRecord>(key: K, value: ChatRecord[K]) => {
     const base = editForm || ({} as ChatRecord);
@@ -299,6 +323,26 @@ export default function RecordsView() {
     }
   };
 
+  const acknowledgeRow = async (record: ChatRecord) => {
+    if (acknowledgingId != null) return;
+    const undoing = Boolean(String(record.acknowledgedAt ?? "").trim());
+    setAcknowledgingId(record.id);
+    setAcknowledgeError("");
+    try {
+      await acknowledgeChatRecord(record.id);
+    } catch (e) {
+      setAcknowledgeError(
+        e instanceof Error
+          ? e.message
+          : undoing
+            ? "Could not remove acknowledgement."
+            : "Could not acknowledge this record.",
+      );
+    } finally {
+      setAcknowledgingId(null);
+    }
+  };
+
   const openDeleteDialog = (record: ChatRecord) => {
     setDeleteError("");
     setDeleteTarget(record);
@@ -385,7 +429,7 @@ export default function RecordsView() {
                     lineHeight: 1.45,
                   }}
                 >
-                  Adjust times and note. Use the hour / minute / AM·PM pickers — same as Log Chat.
+                  Adjust times and remarks. Use the hour / minute / AM·PM pickers — same as Log Chat.
                   Only 1st Chat Receive is required; reply fields can stay blank until updated.
                 </div>
               </div>
@@ -419,11 +463,16 @@ export default function RecordsView() {
               />
             </div>
             <div style={{ marginBottom: 14 }}>
-              <textarea
-                style={inputStyle({ minHeight: 72, resize: "vertical", fontFamily: SANS })}
-                placeholder="Important lead note"
-                value={editForm.note || ""}
-                onChange={(e) => setEditF("note", e.target.value)}
+              <LogRemarksFields
+                idPrefix="records-edit-remarks"
+                category={editRemarks.category}
+                details={editRemarks.details}
+                onCategoryChange={(v) =>
+                  setEditF("note", composeRemarkNote(v, editRemarks.details))
+                }
+                onDetailsChange={(v) =>
+                  setEditF("note", composeRemarkNote(editRemarks.category, v))
+                }
               />
             </div>
             <section
@@ -576,6 +625,9 @@ export default function RecordsView() {
               <span className="ct-records-ledger__hint">
                 Click a row for details · scroll horizontally on smaller screens
               </span>
+              {acknowledgeError ? (
+                <span className="ct-records-ledger__ack-error">{acknowledgeError}</span>
+              ) : null}
             </div>
           </div>
           <RecordsPaginationBar
@@ -593,7 +645,7 @@ export default function RecordsView() {
           <table className="ct-records-table">
             <thead>
               <tr>
-                {LEDGER_HEADERS.map(({ label, className }) => (
+                {ledgerHeaders.map(({ label, className }) => (
                   <th key={label} className={className}>
                     {label}
                   </th>
@@ -603,7 +655,7 @@ export default function RecordsView() {
             <tbody>
               {pageRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={17} className="ct-records-table__empty">
+                  <td colSpan={ledgerHeaders.length} className="ct-records-table__empty">
                     <div style={{ ...TYPE.caption, fontWeight: 500 }}>
                       No records match the current filters.
                     </div>
@@ -686,6 +738,37 @@ export default function RecordsView() {
                     <td className="ct-records-table__col-status">
                       <StatusBadge record={r} />
                     </td>
+                    {showAckColumn ? (
+                      <td
+                        className="ct-records-table__col-ack"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          className={
+                            r.acknowledgedAt
+                              ? "ct-records-table__action-btn ct-records-table__action-btn--ack"
+                              : "ct-records-table__action-btn"
+                          }
+                          disabled={acknowledgingId === r.id}
+                          title={
+                            r.acknowledgedAt
+                              ? r.acknowledgedBy
+                                ? `Acknowledged by ${r.acknowledgedBy}. Click to undo.`
+                                : "Acknowledged. Click to undo."
+                              : "Mark this record as acknowledged"
+                          }
+                          onClick={() => void acknowledgeRow(r)}
+                        >
+                          {acknowledgingId === r.id
+                            ? "Saving…"
+                            : r.acknowledgedAt
+                              ? "Acknowledged"
+                              : "Acknowledge"}
+                        </button>
+                      </td>
+                    ) : null}
                     <td className="ct-records-table__col-ras ct-records-table__ras">
                       <span>{r.received}</span>
                       <span className="ct-records-table__ras-sep"> / </span>
@@ -693,12 +776,12 @@ export default function RecordsView() {
                       <span className="ct-records-table__ras-sep"> / </span>
                       <span>{r.resolved}</span>
                     </td>
-                    <td
-                      className="ct-records-table__col-actions"
-                      onClick={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
-                    >
-                      {canUpdateRecords || canDeleteRecords ? (
+                    {showRowActions ? (
+                      <td
+                        className="ct-records-table__col-actions"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
                         <div className="ct-records-table__actions">
                           {canUpdateRecords ? (
                             <button
@@ -720,8 +803,8 @@ export default function RecordsView() {
                             </button>
                           ) : null}
                         </div>
-                      ) : null}
-                    </td>
+                      </td>
+                    ) : null}
                   </tr>
                 ))
               )}

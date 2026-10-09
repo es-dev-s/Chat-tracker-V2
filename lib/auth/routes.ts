@@ -41,7 +41,7 @@ export function tabsForRole(role: UserRole | string): TabId[] {
     return ["dashboard", "records", "notes", "admin"];
   }
   if (role === "mainTeamLead") {
-    return ["dashboard", "leads", "leadNotes"];
+    return ["dashboard", "records", "leads", "leadNotes"];
   }
   return ["dashboard", "log", "records", "notes"];
 }

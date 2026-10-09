@@ -40,6 +40,11 @@ type WorkspaceState = {
   ) => void;
   mergeVersionPayload: (payload: WorkspaceVersionPayload, source: SyncSource) => void;
   patchRecord: (record: ChatRecord) => void;
+  patchRecordAcknowledgement: (
+    recordId: number,
+    acknowledgedAt: string | null,
+    acknowledgedBy: string | null,
+  ) => void;
   removeRecord: (recordId: number) => void;
   touchNetwork: (version: string) => void;
   reset: () => void;
@@ -185,6 +190,29 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       : [record, ...state.records].sort(
           (a, b) => b.date.localeCompare(a.date) || b.id - a.id,
         );
+    set({ records, localRevision });
+    if (state.cacheKey) {
+      writeWorkspaceCache(state.cacheKey, {
+        version: state.version,
+        fetchedAt: Date.now(),
+        records,
+        users: state.users,
+        teams: state.teams,
+        profiles: state.profiles,
+        dismissedNotifs: state.dismissedNotifs,
+        notifUserKey: state.notifUserKey,
+        recordsComplete: state.recordsComplete,
+      });
+    }
+  },
+
+  patchRecordAcknowledgement: (recordId, acknowledgedAt, acknowledgedBy) => {
+    const state = get();
+    if (!state.records.some((r) => r.id === recordId)) return;
+    const records = state.records.map((r) =>
+      r.id === recordId ? { ...r, acknowledgedAt, acknowledgedBy } : r,
+    );
+    const localRevision = state.localRevision + 1;
     set({ records, localRevision });
     if (state.cacheKey) {
       writeWorkspaceCache(state.cacheKey, {
