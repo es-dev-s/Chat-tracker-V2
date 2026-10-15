@@ -5,6 +5,8 @@ import {
 } from "@/lib/auth/record-write";
 import {
   validateRecordTimeOrder,
+  withValidatedChatDirection,
+  withValidatedReplyTiming,
   withValidatedRecordOutcomes,
 } from "@/lib/auth/record-validation";
 import { mapWriteError } from "@/lib/api/map-write-error";
@@ -42,7 +44,13 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (!existingRow) {
       return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
     }
-    const normalized = withValidatedRecordOutcomes(rec, existingRow);
+    const normalized = withValidatedReplyTiming(
+      withValidatedChatDirection(
+        withValidatedRecordOutcomes(rec, existingRow),
+        existingRow,
+      ),
+      existingRow,
+    );
     validateRecordTimeOrder(normalized);
     const commitPatch = checkViewerMayCommitRecord(viewer, normalized, existingRow);
     if (!commitPatch.ok) {

@@ -1,6 +1,8 @@
 import type { AppUser } from "./users";
 import { filterRecordsForViewer } from "@/lib/auth/scoping";
 import { applyRecordScopeToQuery } from "./record-scope";
+import { normalizeChatDirection, type ChatDirection } from "@/lib/records/chat-direction";
+import { normalizeReplyTiming, type ReplyTiming } from "@/lib/records/reply-timing";
 import {
   checkSupabaseResult,
   throwIfRetryableSupabaseError,
@@ -18,6 +20,10 @@ export type ChatRecord = {
   note: string;
   /** Payment follow-up amount to be paid. Empty when none. */
   amountToPay: string;
+  /** 'in' | 'out'. Null on legacy rows logged before the field existed. */
+  chatDirection?: ChatDirection | null;
+  /** Optional reply timing slug. Null when not set. */
+  replyTiming?: ReplyTiming | null;
   requiredDocuments?: string;
   classSessionDate?: string;
   classSessionTime?: string;
@@ -60,6 +66,8 @@ function dbChatRowToApp(row: Record<string, unknown>): ChatRecord | null {
     phone: String(row.phone ?? ""),
     note: String(row.note ?? ""),
     amountToPay: String(row.amount_to_pay ?? ""),
+    chatDirection: normalizeChatDirection(row.chat_direction),
+    replyTiming: normalizeReplyTiming(row.reply_timing),
     requiredDocuments: String(row.required_documents ?? ""),
     classSessionDate: String(row.class_session_date ?? ""),
     classSessionTime: String(row.class_session_time ?? ""),

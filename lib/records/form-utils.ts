@@ -3,6 +3,8 @@ import { formatStoredTimeDisplay } from "@/lib/utils/time-input";
 import type { SessionUser } from "@/lib/auth/constants";
 import { getUserTeamsList } from "@/lib/auth/scoping";
 import { composeRemarkNote } from "@/lib/records/remarks";
+import { normalizeChatDirection, type ChatDirection } from "@/lib/records/chat-direction";
+import { normalizeReplyTiming, type ReplyTiming } from "@/lib/records/reply-timing";
 
 export type LogFormState = {
   date: string;
@@ -11,6 +13,10 @@ export type LogFormState = {
   profile: string;
   clientName: string;
   phone: string;
+  /** Required 'in' | 'out'. Empty until the user picks one. */
+  chatDirection: ChatDirection | "";
+  /** Optional reply timing slug; empty when not chosen. */
+  replyTiming: ReplyTiming | "";
   /** Predefined remark type. Packed into `note` on save. */
   remarkCategory: string;
   note: string;
@@ -33,6 +39,8 @@ export function emptyLogForm(): LogFormState {
     profile: "",
     clientName: "",
     phone: "",
+    chatDirection: "",
+    replyTiming: "",
     remarkCategory: "",
     note: "",
     firstReceive: "",
@@ -277,6 +285,8 @@ export function buildChatRecordFromForm(
     profile: String(form.profile || "").trim(),
     clientName: String(form.clientName || "").trim(),
     phone: form.phone,
+    chatDirection: normalizeChatDirection(form.chatDirection),
+    replyTiming: normalizeReplyTiming(form.replyTiming),
     note: storedNote,
     firstReceive: form.firstReceive,
     firstReply: form.firstReply,

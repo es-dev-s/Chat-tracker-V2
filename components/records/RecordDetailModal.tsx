@@ -15,6 +15,8 @@ import { formatStoredTimeDisplay } from "@/lib/utils/time-input";
 import { patchChatRecord } from "@/lib/api/mutations";
 import type { ChatRecord } from "@/lib/db/records";
 import ChatScreenshotField from "@/components/records/ChatScreenshotField";
+import { ChatDirectionBadge } from "@/components/ui/ChatDirectionToggle";
+import { ReplyTimingText } from "@/components/ui/ReplyTimingSelect";
 
 function StatusBadge({ record }: { record: Partial<ChatRecord> }) {
   const hasAnalystLast = !!(String(record.analystLastReply ?? "").trim());
@@ -226,6 +228,18 @@ export default function RecordDetailModal({
               <DetailField label="Profile" value={record.profile} />
               <DetailField label="Client name" value={record.clientName} />
               <DetailField label="Phone" value={record.phone} />
+              <div className="ct-record-detail__field">
+                <dt className="ct-record-detail__field-label">Device</dt>
+                <dd className="ct-record-detail__field-value">
+                  <ChatDirectionBadge value={record.chatDirection} />
+                </dd>
+              </div>
+              <div className="ct-record-detail__field">
+                <dt className="ct-record-detail__field-label">Reply timing</dt>
+                <dd className="ct-record-detail__field-value">
+                  <ReplyTimingText value={record.replyTiming} />
+                </dd>
+              </div>
               <DetailField label="Created by" value={record.createdBy} />
               <DetailField
                 label="R / A / S"

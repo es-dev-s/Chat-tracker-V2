@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { checkViewerMayCommitRecord } from "@/lib/auth/record-write";
 import {
   validateRecordTimeOrder,
+  withValidatedChatDirection,
+  withValidatedReplyTiming,
   withValidatedRecordOutcomes,
 } from "@/lib/auth/record-validation";
 import { filterRecordsForViewer } from "@/lib/auth/scoping";
@@ -40,7 +42,13 @@ export async function POST(request: Request) {
     const { id: _clientId, ...rest } = raw as Record<string, unknown>;
     void _clientId;
     const canonical = await withCanonicalRecordTeam(rest);
-    const normalized = withValidatedRecordOutcomes(canonical, undefined);
+    const normalized = withValidatedReplyTiming(
+      withValidatedChatDirection(
+        withValidatedRecordOutcomes(canonical, undefined),
+        undefined,
+      ),
+      undefined,
+    );
     validateRecordTimeOrder(normalized);
     const commitPost = checkViewerMayCommitRecord(viewer, normalized, undefined);
     if (!commitPost.ok) {

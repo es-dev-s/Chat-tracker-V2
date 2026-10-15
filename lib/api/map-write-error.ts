@@ -13,6 +13,56 @@ export function mapWriteError(err: unknown): NextResponse {
     /could not find|does not exist|schema cache|undefined_column|42703|PGRST204/i.test(code) &&
     followUpColumns.some((column) => code.toLowerCase().includes(column));
 
+  const missingDirectionColumn =
+    /could not find|does not exist|schema cache|undefined_column|42703|PGRST204/i.test(code) &&
+    code.toLowerCase().includes("chat_direction");
+
+  if (missingDirectionColumn) {
+    return NextResponse.json(
+      {
+        error: "DATABASE_SCHEMA_OUTDATED",
+        message:
+          "The database is missing the Device field. Apply the chat_direction migration, then retry.",
+      },
+      { status: 503 },
+    );
+  }
+
+  const missingReplyTimingColumn =
+    /could not find|does not exist|schema cache|undefined_column|42703|PGRST204/i.test(code) &&
+    code.toLowerCase().includes("reply_timing");
+
+  if (missingReplyTimingColumn) {
+    return NextResponse.json(
+      {
+        error: "DATABASE_SCHEMA_OUTDATED",
+        message:
+          "The database is missing the Reply timing field. Apply the reply_timing migration, then retry.",
+      },
+      { status: 503 },
+    );
+  }
+
+  if (code === "REPLY_TIMING_INVALID") {
+    return NextResponse.json(
+      { error: code, message: "Reply timing must be one of the listed options." },
+      { status: 400 },
+    );
+  }
+
+  if (code === "CHAT_DIRECTION_REQUIRED") {
+    return NextResponse.json(
+      { error: code, message: "Device is required. Choose In or Out." },
+      { status: 400 },
+    );
+  }
+  if (code === "CHAT_DIRECTION_INVALID") {
+    return NextResponse.json(
+      { error: code, message: "Device must be In or Out." },
+      { status: 400 },
+    );
+  }
+
   if (missingColumnError) {
     return NextResponse.json(
       {

@@ -32,6 +32,9 @@ import LogTimeFieldHint from "@/components/log/LogTimeFieldHint";
 import LogOutcomeField, { type OutcomeKey } from "@/components/log/LogOutcomeField";
 import LogRemarksFields from "@/components/log/LogRemarksFields";
 import ChatScreenshotField from "@/components/records/ChatScreenshotField";
+import ChatDirectionToggle, { ChatDirectionLabel } from "@/components/ui/ChatDirectionToggle";
+import { normalizeChatDirection } from "@/lib/records/chat-direction";
+import ReplyTimingSelect, { ReplyTimingLabel } from "@/components/ui/ReplyTimingSelect";
 
 const TIME_FIELDS = [
   { label: "1st Chat Receive", key: "firstReceive" as const, required: true },
@@ -57,6 +60,7 @@ export default function LogChatView() {
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
   const [formEpoch, setFormEpoch] = useState(0);
+  const [directionTouched, setDirectionTouched] = useState(false);
 
   const assignedProfiles = useMemo(() => {
     if (!user || user.role !== "analyst") return [];
@@ -123,6 +127,7 @@ export default function LogChatView() {
     setForm({ ...emptyLogForm(), date: todayIso(), team: defaultTeam });
     setUseFirstReplyAsLast(false);
     setFormError("");
+    setDirectionTouched(false);
     setFormEpoch((n) => n + 1);
   };
 
@@ -146,6 +151,11 @@ export default function LogChatView() {
       !normalizedForm.firstReceive
     ) {
       setFormError("Date, Analyst, Team and 1st Chat Receive are required.");
+      return;
+    }
+    if (!normalizeChatDirection(normalizedForm.chatDirection)) {
+      setDirectionTouched(true);
+      setFormError("Choose a device (In or Out).");
       return;
     }
     if (
@@ -350,6 +360,56 @@ export default function LogChatView() {
           </div>
         </div>
 
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
+            gap: 16,
+            marginBottom: 20,
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <ChatDirectionLabel id="log-chat-direction-label" required />
+            <ChatDirectionToggle
+              id="log-chat-direction"
+              aria-labelledby="log-chat-direction-label"
+              value={form.chatDirection}
+              invalid={directionTouched && !form.chatDirection}
+              aria-describedby={
+                directionTouched && !form.chatDirection ? "log-chat-direction-error" : undefined
+              }
+              onChange={(v) => {
+                setF("chatDirection", v);
+                setDirectionTouched(true);
+                if (formError.startsWith("Choose a device")) setFormError("");
+              }}
+            />
+            {directionTouched && !form.chatDirection ? (
+              <div
+                id="log-chat-direction-error"
+                role="alert"
+                style={{ color: C.red, fontSize: 12, marginTop: 8, lineHeight: 1.45 }}
+              >
+                Choose In or Out.
+              </div>
+            ) : (
+              <div style={{ color: C.muted, fontSize: 12, marginTop: 8, lineHeight: 1.45 }}>
+                In or Out for the device used on this chat.
+              </div>
+            )}
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <ReplyTimingLabel />
+            <ReplyTimingSelect
+              value={form.replyTiming}
+              onChange={(v) => setF("replyTiming", v)}
+            />
+            <div style={{ color: C.muted, fontSize: 12, marginTop: 8, lineHeight: 1.45 }}>
+              Optional. When the reply happened, if it was delayed.
+            </div>
+          </div>
+        </div>
+
         <LogRemarksFields
           idPrefix="log-remarks"
           category={form.remarkCategory}
@@ -518,6 +578,7 @@ export default function LogChatView() {
             !enforcedTeamValue ||
             !form.date ||
             !form.firstReceive ||
+            !form.chatDirection ||
             logChatProfileMissing) && (
             <span style={{ color: C.muted, fontSize: 12 }}>
               *{" "}
@@ -527,6 +588,7 @@ export default function LogChatView() {
                   !form.date ||
                   !form.firstReceive) &&
                   "Date, Analyst, Team and 1st Chat Receive",
+                !form.chatDirection && "Device",
                 logChatProfileMissing && "Assigned profile",
               ]
                 .filter(Boolean)

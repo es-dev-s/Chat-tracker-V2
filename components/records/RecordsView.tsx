@@ -34,6 +34,14 @@ import LogTimeFieldHint from "@/components/log/LogTimeFieldHint";
 import ChatScreenshotField from "@/components/records/ChatScreenshotField";
 import ChatScreenshotThumb from "@/components/records/ChatScreenshotThumb";
 import RecordDetailModal from "@/components/records/RecordDetailModal";
+import ChatDirectionToggle, {
+  ChatDirectionBadge,
+  ChatDirectionLabel,
+} from "@/components/ui/ChatDirectionToggle";
+import ReplyTimingSelect, {
+  ReplyTimingLabel,
+  ReplyTimingText,
+} from "@/components/ui/ReplyTimingSelect";
 import { useRecordsEditScroll } from "@/hooks/useRecordsEditScroll";
 
 const PAGE_SIZE = 25;
@@ -74,6 +82,8 @@ const LEDGER_HEADERS: { label: string; className?: string }[] = [
   { label: "Profile", className: "ct-records-table__col-profile" },
   { label: "Client name", className: "ct-records-table__col-client" },
   { label: "Phone", className: "ct-records-table__col-phone" },
+  { label: "Device", className: "ct-records-table__col-direction" },
+  { label: "Reply timing", className: "ct-records-table__col-reply-timing" },
   { label: "1st Receive", className: "ct-records-table__col-time" },
   { label: "1st Shot", className: "ct-records-table__col-shot" },
   { label: "1st Reply", className: "ct-records-table__col-time" },
@@ -462,6 +472,36 @@ export default function RecordsView() {
                 placeholder="Team"
               />
             </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))",
+                gap: 14,
+                marginBottom: 14,
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <ChatDirectionLabel id="records-edit-direction-label" />
+                <ChatDirectionToggle
+                  id="records-edit-direction"
+                  aria-labelledby="records-edit-direction-label"
+                  value={editForm.chatDirection}
+                  onChange={(v) => setEditF("chatDirection", v)}
+                />
+                {!editForm.chatDirection ? (
+                  <div style={{ color: C.muted, fontSize: 12, marginTop: 6 }}>
+                    Device not recorded for this older chat. Optional here.
+                  </div>
+                ) : null}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <ReplyTimingLabel />
+                <ReplyTimingSelect
+                  value={editForm.replyTiming}
+                  onChange={(v) => setEditF("replyTiming", v || null)}
+                />
+              </div>
+            </div>
             <div style={{ marginBottom: 14 }}>
               <LogRemarksFields
                 idPrefix="records-edit-remarks"
@@ -696,6 +736,12 @@ export default function RecordsView() {
                     </td>
                     <td className="ct-records-table__col-phone">
                       <LedgerTextCell value={r.phone || ""} />
+                    </td>
+                    <td className="ct-records-table__col-direction">
+                      <ChatDirectionBadge value={r.chatDirection} />
+                    </td>
+                    <td className="ct-records-table__col-reply-timing">
+                      <ReplyTimingText value={r.replyTiming} />
                     </td>
                     <td className="ct-records-table__col-time">
                       {formatStoredTimeDisplay(r.firstReceive) || "—"}

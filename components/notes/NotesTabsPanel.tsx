@@ -23,6 +23,8 @@ import { displayClient } from "@/lib/records/form-utils";
 import { formatRemarkNoteDisplay } from "@/lib/records/remarks";
 import type { ChatRecord } from "@/lib/db/records";
 import type { WorkspaceUser } from "@/lib/workspace/cache";
+import { ChatDirectionBadge } from "@/components/ui/ChatDirectionToggle";
+import { ReplyTimingText } from "@/components/ui/ReplyTimingSelect";
 
 type NotesPanelView = "analyst" | "mainLead";
 
@@ -343,7 +345,7 @@ export default function NotesTabsPanel({
 
   const showTabs = !lockView;
   const columnCount =
-    (activeView === "analyst" ? 6 : 7) +
+    (activeView === "analyst" ? 8 : 9) +
     (activeView === "mainLead" && onDeleteMainLeadNote ? 1 : 0) +
     (showAcknowledge ? 1 : 0);
 
@@ -428,6 +430,8 @@ export default function NotesTabsPanel({
               <th>Team</th>
               <th>Profile</th>
               <th>{activeView === "analyst" ? "Client name" : "Client"}</th>
+              <th>Device</th>
+              <th>Reply timing</th>
               <th>Analyst</th>
               <th>{activeView === "analyst" ? "Analyst Note" : "Main Lead Note"}</th>
               {activeView === "mainLead" ? <th>Follow-up</th> : null}
@@ -455,6 +459,12 @@ export default function NotesTabsPanel({
                     <ProfilePill profile={r.profile || ""} />
                   </td>
                   <td className="ct-notes-table__client">{r.clientName || "—"}</td>
+                  <td className="ct-notes-table__direction">
+                    <ChatDirectionBadge value={r.chatDirection} />
+                  </td>
+                  <td className="ct-notes-table__reply-timing">
+                    <ReplyTimingText value={r.replyTiming} />
+                  </td>
                   <td className="ct-notes-table__analyst">
                     <AnalystAvatarCell analyst={r.analyst || ""} users={users} showName />
                   </td>
@@ -485,6 +495,12 @@ export default function NotesTabsPanel({
                     <ProfilePill profile={r.profile || ""} />
                   </td>
                   <td className="ct-notes-table__client">{displayClient(r)}</td>
+                  <td className="ct-notes-table__direction">
+                    <ChatDirectionBadge value={r.chatDirection} />
+                  </td>
+                  <td className="ct-notes-table__reply-timing">
+                    <ReplyTimingText value={r.replyTiming} />
+                  </td>
                   <td className="ct-notes-table__analyst">
                     <AnalystAvatarCell analyst={r.analyst || ""} users={users} showName />
                   </td>

@@ -1,13 +1,36 @@
 import type { ChatRecord } from "./records";
 import { normalizeAmountToPay } from "@/lib/records/amount";
+import { normalizeChatDirection } from "@/lib/records/chat-direction";
+import { REPLY_TIMING_CLEARED, normalizeReplyTiming } from "@/lib/records/reply-timing";
 import { checkSupabaseResult, withSupabaseFailover } from "./supabase";
 
 function normalizeFollowUpText(value: unknown, maxLength: number): string {
   return String(value ?? "").trim().slice(0, maxLength);
 }
 
+/**
+ * Only send chat_direction when a valid value is present, so writes to legacy
+ * rows (no direction) keep working even before the chat_direction migration.
+ */
+function chatDirectionColumn(rec: Record<string, unknown>): { chat_direction?: string } {
+  const direction = normalizeChatDirection(rec.chatDirection ?? rec.chat_direction);
+  return direction ? { chat_direction: direction } : {};
+}
+
+/**
+ * Only send reply_timing when a value is set, or when validation marked it as
+ * explicitly cleared, so saves without it work before the migration.
+ */
+function replyTimingColumn(rec: Record<string | symbol, unknown>): { reply_timing?: string | null } {
+  const timing = normalizeReplyTiming(rec.replyTiming ?? rec.reply_timing);
+  if (timing) return { reply_timing: timing };
+  return rec[REPLY_TIMING_CLEARED] === true ? { reply_timing: null } : {};
+}
+
 function appRecordToDbRowForInsert(rec: Record<string, unknown>) {
   return {
+    ...chatDirectionColumn(rec),
+    ...replyTimingColumn(rec),
     date: rec.date ?? "",
     analyst: rec.analyst ?? "",
     team: rec.team ?? "",
@@ -72,6 +95,8 @@ function dbChatRowToApp(row: Record<string, unknown>): ChatRecord | null {
     phone: String(row.phone ?? ""),
     note: String(row.note ?? ""),
     amountToPay: String(row.amount_to_pay ?? ""),
+    chatDirection: normalizeChatDirection(row.chat_direction),
+    replyTiming: normalizeReplyTiming(row.reply_timing),
     requiredDocuments: String(row.required_documents ?? ""),
     classSessionDate: String(row.class_session_date ?? ""),
     classSessionTime: String(row.class_session_time ?? ""),

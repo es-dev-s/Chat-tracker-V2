@@ -6935,3 +6935,11 @@ button:disabled {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Chat direction (In / Out) ─────────────────────────────── */
+/* Layout and colours are inline in ChatDirectionToggle.tsx; this only adds
+   a keyboard focus ring inside the segmented control. */
+.ct-direction-toggle__btn:focus-visible {
+  outline: 2px solid var(--ct-accent);
+  outline-offset: 1px;
+}
