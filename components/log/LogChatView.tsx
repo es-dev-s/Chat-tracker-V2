@@ -34,7 +34,6 @@ import LogRemarksFields from "@/components/log/LogRemarksFields";
 import ChatScreenshotField from "@/components/records/ChatScreenshotField";
 import ChatDirectionToggle, { ChatDirectionLabel } from "@/components/ui/ChatDirectionToggle";
 import { normalizeChatDirection } from "@/lib/records/chat-direction";
-import ReplyTimingSelect, { ReplyTimingLabel } from "@/components/ui/ReplyTimingSelect";
 
 const TIME_FIELDS = [
   { label: "1st Chat Receive", key: "firstReceive" as const, required: true },
@@ -360,54 +359,35 @@ export default function LogChatView() {
           </div>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
-            gap: 16,
-            marginBottom: 20,
-          }}
-        >
-          <div style={{ minWidth: 0 }}>
-            <ChatDirectionLabel id="log-chat-direction-label" required />
-            <ChatDirectionToggle
-              id="log-chat-direction"
-              aria-labelledby="log-chat-direction-label"
-              value={form.chatDirection}
-              invalid={directionTouched && !form.chatDirection}
-              aria-describedby={
-                directionTouched && !form.chatDirection ? "log-chat-direction-error" : undefined
-              }
-              onChange={(v) => {
-                setF("chatDirection", v);
-                setDirectionTouched(true);
-                if (formError.startsWith("Choose a device")) setFormError("");
-              }}
-            />
-            {directionTouched && !form.chatDirection ? (
-              <div
-                id="log-chat-direction-error"
-                role="alert"
-                style={{ color: C.red, fontSize: 12, marginTop: 8, lineHeight: 1.45 }}
-              >
-                Choose In or Out.
-              </div>
-            ) : (
-              <div style={{ color: C.muted, fontSize: 12, marginTop: 8, lineHeight: 1.45 }}>
-                In or Out for the device used on this chat.
-              </div>
-            )}
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <ReplyTimingLabel />
-            <ReplyTimingSelect
-              value={form.replyTiming}
-              onChange={(v) => setF("replyTiming", v)}
-            />
-            <div style={{ color: C.muted, fontSize: 12, marginTop: 8, lineHeight: 1.45 }}>
-              Optional. When the reply happened, if it was delayed.
+        <div style={{ marginBottom: 20, maxWidth: 360 }}>
+          <ChatDirectionLabel id="log-chat-direction-label" required />
+          <ChatDirectionToggle
+            id="log-chat-direction"
+            aria-labelledby="log-chat-direction-label"
+            value={form.chatDirection}
+            invalid={directionTouched && !form.chatDirection}
+            aria-describedby={
+              directionTouched && !form.chatDirection ? "log-chat-direction-error" : undefined
+            }
+            onChange={(v) => {
+              setF("chatDirection", v);
+              setDirectionTouched(true);
+              if (formError.startsWith("Choose a device")) setFormError("");
+            }}
+          />
+          {directionTouched && !form.chatDirection ? (
+            <div
+              id="log-chat-direction-error"
+              role="alert"
+              style={{ color: C.red, fontSize: 12, marginTop: 8, lineHeight: 1.45 }}
+            >
+              Choose In or Out.
             </div>
-          </div>
+          ) : (
+            <div style={{ color: C.muted, fontSize: 12, marginTop: 8, lineHeight: 1.45 }}>
+              In or Out for the device used on this chat.
+            </div>
+          )}
         </div>
 
         <LogRemarksFields

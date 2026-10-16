@@ -1,34 +1,4 @@
 import { normalizeChatDirection } from "@/lib/records/chat-direction";
-import { REPLY_TIMING_CLEARED, normalizeReplyTiming } from "@/lib/records/reply-timing";
-
-/**
- * Validates optional `replyTiming`. Key absent: keep the stored value (update)
- * or none (create). Empty/null: cleared. Otherwise must be a known slug.
- */
-export function withValidatedReplyTiming<T extends Record<string, unknown>>(
-  record: T,
-  existingRow?: Record<string, unknown> | null,
-): T {
-  const rec = record as Record<string, unknown>;
-  const hasKey = "replyTiming" in rec || "reply_timing" in rec;
-  const raw = rec.replyTiming ?? rec.reply_timing;
-  const { reply_timing: _legacy, ...rest } = rec;
-  void _legacy;
-  const existing = normalizeReplyTiming(existingRow?.replyTiming ?? existingRow?.reply_timing);
-
-  if (!hasKey) {
-    return { ...rest, replyTiming: existingRow ? existing : null } as unknown as T;
-  }
-  if (raw === undefined || raw === null || String(raw).trim() === "") {
-    const out: Record<string | symbol, unknown> = { ...rest, replyTiming: null };
-    if (existing) out[REPLY_TIMING_CLEARED] = true;
-    return out as unknown as T;
-  }
-  const timing = normalizeReplyTiming(raw);
-  if (!timing) throw new Error("REPLY_TIMING_INVALID");
-  return { ...rest, replyTiming: timing } as unknown as T;
-}
-
 /**
  * Validates `chatDirection` ('in' | 'out'). Required on create (except
  * lead-note-only rows). On update a

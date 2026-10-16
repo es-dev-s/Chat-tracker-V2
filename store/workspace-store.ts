@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { ChatRecord } from "@/lib/db/records";
+import type { ReplyTiming } from "@/lib/records/reply-timing";
 import {
   buildNotifications,
   NOTIFICATIONS_POPOVER_LIMIT,
@@ -44,6 +45,10 @@ type WorkspaceState = {
     recordId: number,
     acknowledgedAt: string | null,
     acknowledgedBy: string | null,
+  ) => void;
+  patchRecordReplyTiming: (
+    recordId: number,
+    replyTiming: ReplyTiming | null,
   ) => void;
   removeRecord: (recordId: number) => void;
   touchNetwork: (version: string) => void;
@@ -211,6 +216,29 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     if (!state.records.some((r) => r.id === recordId)) return;
     const records = state.records.map((r) =>
       r.id === recordId ? { ...r, acknowledgedAt, acknowledgedBy } : r,
+    );
+    const localRevision = state.localRevision + 1;
+    set({ records, localRevision });
+    if (state.cacheKey) {
+      writeWorkspaceCache(state.cacheKey, {
+        version: state.version,
+        fetchedAt: Date.now(),
+        records,
+        users: state.users,
+        teams: state.teams,
+        profiles: state.profiles,
+        dismissedNotifs: state.dismissedNotifs,
+        notifUserKey: state.notifUserKey,
+        recordsComplete: state.recordsComplete,
+      });
+    }
+  },
+
+  patchRecordReplyTiming: (recordId, replyTiming) => {
+    const state = get();
+    if (!state.records.some((r) => r.id === recordId)) return;
+    const records = state.records.map((r) =>
+      r.id === recordId ? { ...r, replyTiming } : r,
     );
     const localRevision = state.localRevision + 1;
     set({ records, localRevision });

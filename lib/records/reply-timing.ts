@@ -17,13 +17,6 @@ export const REPLY_TIMING_LABELS: Record<ReplyTiming, string> = {
   sunday_only: "Replied only on Sunday",
 };
 
-/**
- * Marks a validated record whose reply timing was explicitly cleared, so the
- * writer sends `reply_timing: null`. A symbol key survives object spreads but
- * is never serialised to JSON or seen by Object.keys-based field checks.
- */
-export const REPLY_TIMING_CLEARED: unique symbol = Symbol("replyTimingCleared");
-
 export function isReplyTiming(value: unknown): value is ReplyTiming {
   return (REPLY_TIMINGS as readonly string[]).includes(String(value));
 }

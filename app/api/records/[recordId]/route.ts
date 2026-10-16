@@ -6,7 +6,6 @@ import {
 import {
   validateRecordTimeOrder,
   withValidatedChatDirection,
-  withValidatedReplyTiming,
   withValidatedRecordOutcomes,
 } from "@/lib/auth/record-validation";
 import { mapWriteError } from "@/lib/api/map-write-error";
@@ -33,8 +32,15 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (!raw || typeof raw !== "object") {
       return NextResponse.json({ error: "RECORD_REQUIRED" }, { status: 400 });
     }
+    const {
+      replyTiming: _rt,
+      reply_timing: _rts,
+      ...rawSansTiming
+    } = raw as Record<string, unknown>;
+    void _rt;
+    void _rts;
     const rec = await withCanonicalRecordTeam({
-      ...(raw as Record<string, unknown>),
+      ...rawSansTiming,
       id,
     });
     if (Number(rec.id) !== id) {
@@ -44,9 +50,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (!existingRow) {
       return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
     }
-    const normalized = withValidatedReplyTiming(
-      withValidatedChatDirection(
-        withValidatedRecordOutcomes(rec, existingRow),
+    // Keep stored reply_timing; only the dedicated endpoint may change it.
+    const normalized = withValidatedChatDirection(
+      withValidatedRecordOutcomes(
+        { ...rec, replyTiming: existingRow.replyTiming ?? null },
         existingRow,
       ),
       existingRow,

@@ -1,4 +1,5 @@
 import type { ChatRecord } from "@/lib/db/records";
+import type { ReplyTiming } from "@/lib/records/reply-timing";
 import { invalidateWorkspaceClientCache } from "@/lib/workspace/cache";
 import { requestWorkspaceSync } from "@/lib/workspace/sync-events";
 import { useAuthStore } from "@/store/auth-store";
@@ -86,6 +87,40 @@ export async function patchChatRecord(record: ChatRecord | Record<string, unknow
   useWorkspaceStore.getState().patchRecord(saved);
   await reconcileWorkspaceAfterMutation();
   return saved;
+}
+
+export async function patchRecordReplyTiming(
+  id: number,
+  replyTiming: ReplyTiming | null,
+): Promise<ChatRecord> {
+  const prev = useWorkspaceStore.getState().records.find((r) => r.id === id);
+  const prevTiming = prev?.replyTiming ?? null;
+  useWorkspaceStore.getState().patchRecordReplyTiming(id, replyTiming);
+  try {
+    const res = await fetch(
+      `/api/records/${encodeURIComponent(String(id))}/reply-timing`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ replyTiming }),
+      },
+    );
+    if (res.status === 401) {
+      void useAuthStore.getState().logout();
+      throw new Error("Session expired.");
+    }
+    if (!res.ok) throw new Error(await parseApiError(res));
+    const data = await res.json();
+    const saved = data.record as ChatRecord;
+    useWorkspaceStore
+      .getState()
+      .patchRecordReplyTiming(saved.id, saved.replyTiming ?? null);
+    return saved;
+  } catch (err) {
+    useWorkspaceStore.getState().patchRecordReplyTiming(id, prevTiming);
+    throw err;
+  }
 }
 
 export async function acknowledgeChatRecord(id: number): Promise<ChatRecord> {

@@ -4,7 +4,6 @@ import type { SessionUser } from "@/lib/auth/constants";
 import { getUserTeamsList } from "@/lib/auth/scoping";
 import { composeRemarkNote } from "@/lib/records/remarks";
 import { normalizeChatDirection, type ChatDirection } from "@/lib/records/chat-direction";
-import { normalizeReplyTiming, type ReplyTiming } from "@/lib/records/reply-timing";
 
 export type LogFormState = {
   date: string;
@@ -15,8 +14,6 @@ export type LogFormState = {
   phone: string;
   /** Required 'in' | 'out'. Empty until the user picks one. */
   chatDirection: ChatDirection | "";
-  /** Optional reply timing slug; empty when not chosen. */
-  replyTiming: ReplyTiming | "";
   /** Predefined remark type. Packed into `note` on save. */
   remarkCategory: string;
   note: string;
@@ -40,7 +37,6 @@ export function emptyLogForm(): LogFormState {
     clientName: "",
     phone: "",
     chatDirection: "",
-    replyTiming: "",
     remarkCategory: "",
     note: "",
     firstReceive: "",
@@ -286,7 +282,6 @@ export function buildChatRecordFromForm(
     clientName: String(form.clientName || "").trim(),
     phone: form.phone,
     chatDirection: normalizeChatDirection(form.chatDirection),
-    replyTiming: normalizeReplyTiming(form.replyTiming),
     note: storedNote,
     firstReceive: form.firstReceive,
     firstReply: form.firstReply,

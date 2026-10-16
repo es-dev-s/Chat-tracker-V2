@@ -15,7 +15,7 @@ const OPTIONS = [
   ...REPLY_TIMINGS.map((t) => ({ value: t, label: REPLY_TIMING_LABELS[t] })),
 ];
 
-/** Field label matching the other Log Chat labels. */
+/** Field label matching neighbouring form labels. */
 export function ReplyTimingLabel({ id }: { id?: string }) {
   return (
     <div id={id} style={fieldLabelStyle()}>
@@ -28,19 +28,35 @@ export function ReplyTimingLabel({ id }: { id?: string }) {
 export default function ReplyTimingSelect({
   value,
   onChange,
+  compact = false,
+  disabled = false,
+  id,
 }: {
   value: string | null | undefined;
   onChange: (value: ReplyTiming | "") => void;
+  compact?: boolean;
+  disabled?: boolean;
+  id?: string;
 }) {
   return (
     <CtSelect
+      id={id}
       aria-label="Reply timing"
       openListHighlight="none"
       value={normalizeReplyTiming(value) ?? ""}
       onChange={(v) => onChange(normalizeReplyTiming(v) ?? "")}
       options={OPTIONS}
       placeholder="— Select —"
-      triggerStyle={inputStyle({ cursor: "pointer", minHeight: 42 })}
+      disabled={disabled}
+      triggerStyle={inputStyle({
+        cursor: disabled ? "default" : "pointer",
+        minHeight: compact ? 32 : 42,
+        padding: compact ? "4px 10px" : undefined,
+        fontSize: compact ? 12 : 13,
+        width: "100%",
+        minWidth: compact ? 168 : undefined,
+        maxWidth: compact ? 260 : undefined,
+      })}
     />
   );
 }

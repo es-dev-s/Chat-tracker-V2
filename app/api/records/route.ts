@@ -3,7 +3,6 @@ import { checkViewerMayCommitRecord } from "@/lib/auth/record-write";
 import {
   validateRecordTimeOrder,
   withValidatedChatDirection,
-  withValidatedReplyTiming,
   withValidatedRecordOutcomes,
 } from "@/lib/auth/record-validation";
 import { filterRecordsForViewer } from "@/lib/auth/scoping";
@@ -39,14 +38,14 @@ export async function POST(request: Request) {
     if (!raw || typeof raw !== "object") {
       return NextResponse.json({ error: "RECORD_REQUIRED" }, { status: 400 });
     }
-    const { id: _clientId, ...rest } = raw as Record<string, unknown>;
+    const { id: _clientId, replyTiming: _rt, reply_timing: _rts, ...rest } =
+      raw as Record<string, unknown>;
     void _clientId;
+    void _rt;
+    void _rts;
     const canonical = await withCanonicalRecordTeam(rest);
-    const normalized = withValidatedReplyTiming(
-      withValidatedChatDirection(
-        withValidatedRecordOutcomes(canonical, undefined),
-        undefined,
-      ),
+    const normalized = withValidatedChatDirection(
+      withValidatedRecordOutcomes(canonical, undefined),
       undefined,
     );
     validateRecordTimeOrder(normalized);

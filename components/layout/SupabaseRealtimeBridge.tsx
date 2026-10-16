@@ -6,6 +6,11 @@ import {
   ACK_REALTIME_EVENT,
   ACK_REALTIME_TOPIC,
 } from "@/lib/realtime/acknowledgement-channel";
+import {
+  REPLY_TIMING_REALTIME_EVENT,
+  REPLY_TIMING_REALTIME_TOPIC,
+} from "@/lib/realtime/reply-timing-channel";
+import { normalizeReplyTiming } from "@/lib/records/reply-timing";
 import { useWorkspaceStore } from "@/store/workspace-store";
 
 type RealtimeNode = {
@@ -18,6 +23,11 @@ type AcknowledgementPayload = {
   id?: number;
   acknowledgedAt?: string | null;
   acknowledgedBy?: string | null;
+};
+
+type ReplyTimingPayload = {
+  id?: number;
+  replyTiming?: string | null;
 };
 
 function readRealtimeNodes(url?: string, anonKey?: string): RealtimeNode[] {
@@ -47,9 +57,18 @@ function applyAcknowledgement(payload: AcknowledgementPayload | undefined) {
     );
 }
 
+function applyReplyTiming(payload: ReplyTimingPayload | undefined) {
+  const id = Number(payload?.id);
+  if (!Number.isFinite(id) || id <= 0) return;
+  // Unknown / empty payloads become null (safe before migration too).
+  useWorkspaceStore
+    .getState()
+    .patchRecordReplyTiming(id, normalizeReplyTiming(payload?.replyTiming));
+}
+
 /**
- * Paints acknowledgement changes on every open Records screen as soon as
- * another session saves them.
+ * Paints acknowledgement and reply-timing changes on every open screen as
+ * soon as another session saves them (Supabase broadcast; no DB publication).
  */
 export default function SupabaseRealtimeBridge({
   url,
@@ -58,7 +77,7 @@ export default function SupabaseRealtimeBridge({
   url?: string;
   anonKey?: string;
 }) {
-  const channelRef = useRef<RealtimeChannel | null>(null);
+  const channelsRef = useRef<RealtimeChannel[]>([]);
   const clientRef = useRef<SupabaseClient | null>(null);
   const nodeIndexRef = useRef(0);
 
@@ -69,10 +88,10 @@ export default function SupabaseRealtimeBridge({
     let cancelled = false;
 
     const cleanup = () => {
-      if (channelRef.current) {
-        void channelRef.current.unsubscribe();
-        channelRef.current = null;
+      for (const ch of channelsRef.current) {
+        void ch.unsubscribe();
       }
+      channelsRef.current = [];
       clientRef.current = null;
     };
 
@@ -87,21 +106,30 @@ export default function SupabaseRealtimeBridge({
       clientRef.current = client;
       nodeIndexRef.current = index;
 
-      const channel = client
+      const onChannelStatus = (status: string) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          const next = (nodeIndexRef.current + 1) % nodes.length;
+          if (nodes.length > 1 && next !== nodeIndexRef.current) {
+            subscribe(next);
+          }
+        }
+      };
+
+      const ackChannel = client
         .channel(ACK_REALTIME_TOPIC)
         .on("broadcast", { event: ACK_REALTIME_EVENT }, ({ payload }) => {
           applyAcknowledgement(payload as AcknowledgementPayload);
         })
-        .subscribe((status) => {
-          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-            const next = (nodeIndexRef.current + 1) % nodes.length;
-            if (nodes.length > 1 && next !== nodeIndexRef.current) {
-              subscribe(next);
-            }
-          }
-        });
+        .subscribe(onChannelStatus);
 
-      channelRef.current = channel;
+      const replyChannel = client
+        .channel(REPLY_TIMING_REALTIME_TOPIC)
+        .on("broadcast", { event: REPLY_TIMING_REALTIME_EVENT }, ({ payload }) => {
+          applyReplyTiming(payload as ReplyTimingPayload);
+        })
+        .subscribe(onChannelStatus);
+
+      channelsRef.current = [ackChannel, replyChannel];
     };
 
     subscribe(0);

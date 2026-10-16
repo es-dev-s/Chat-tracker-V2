@@ -1,7 +1,7 @@
 import type { ChatRecord } from "./records";
 import { normalizeAmountToPay } from "@/lib/records/amount";
 import { normalizeChatDirection } from "@/lib/records/chat-direction";
-import { REPLY_TIMING_CLEARED, normalizeReplyTiming } from "@/lib/records/reply-timing";
+import { normalizeReplyTiming, type ReplyTiming } from "@/lib/records/reply-timing";
 import { checkSupabaseResult, withSupabaseFailover } from "./supabase";
 
 function normalizeFollowUpText(value: unknown, maxLength: number): string {
@@ -17,20 +17,9 @@ function chatDirectionColumn(rec: Record<string, unknown>): { chat_direction?: s
   return direction ? { chat_direction: direction } : {};
 }
 
-/**
- * Only send reply_timing when a value is set, or when validation marked it as
- * explicitly cleared, so saves without it work before the migration.
- */
-function replyTimingColumn(rec: Record<string | symbol, unknown>): { reply_timing?: string | null } {
-  const timing = normalizeReplyTiming(rec.replyTiming ?? rec.reply_timing);
-  if (timing) return { reply_timing: timing };
-  return rec[REPLY_TIMING_CLEARED] === true ? { reply_timing: null } : {};
-}
-
 function appRecordToDbRowForInsert(rec: Record<string, unknown>) {
   return {
     ...chatDirectionColumn(rec),
-    ...replyTimingColumn(rec),
     date: rec.date ?? "",
     analyst: rec.analyst ?? "",
     team: rec.team ?? "",
@@ -150,6 +139,29 @@ export async function upsertChatRecord(rec: Record<string, unknown>): Promise<vo
 }
 
 /** Sets or clears acknowledgement on one row. Does not rewrite the rest of the chat. */
+/** Sets or clears reply_timing on one row. Does not rewrite the rest of the chat. */
+export async function setChatRecordReplyTiming(
+  recordId: number,
+  replyTiming: ReplyTiming | null,
+): Promise<ChatRecord> {
+  const now = new Date().toISOString();
+  return withSupabaseFailover(async (sb) => {
+    const res = await sb
+      .from("chat_records")
+      .update({
+        reply_timing: replyTiming,
+        updated_at: now,
+      })
+      .eq("id", recordId)
+      .select("*")
+      .maybeSingle();
+    checkSupabaseResult(res, "set reply_timing");
+    const mapped = dbChatRowToApp(res.data as Record<string, unknown>);
+    if (!mapped) throw new Error("set reply_timing: invalid row");
+    return mapped;
+  });
+}
+
 export async function setChatRecordAcknowledged(
   recordId: number,
   acknowledged: boolean,
