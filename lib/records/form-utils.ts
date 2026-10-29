@@ -1,4 +1,4 @@
-import { diffMins } from "@/lib/utils/format-duration";
+import { diffMins, elapsedClockMins } from "@/lib/utils/format-duration";
 import { formatStoredTimeDisplay } from "@/lib/utils/time-input";
 import type { SessionUser } from "@/lib/auth/constants";
 import { getUserTeamsList } from "@/lib/auth/scoping";
@@ -12,6 +12,10 @@ export type LogFormState = {
   profile: string;
   clientName: string;
   phone: string;
+  /** Optional shift label, e.g. "3 to 7" (WhatsApp Audit). */
+  shift: string;
+  /** Optional client message text (WhatsApp Audit). */
+  clientMessage: string;
   /** Required 'in' | 'out'. Empty until the user picks one. */
   chatDirection: ChatDirection | "";
   /** Predefined remark type. Packed into `note` on save. */
@@ -36,6 +40,8 @@ export function emptyLogForm(): LogFormState {
     profile: "",
     clientName: "",
     phone: "",
+    shift: "",
+    clientMessage: "",
     chatDirection: "",
     remarkCategory: "",
     note: "",
@@ -161,21 +167,25 @@ export function getRecordTimeFieldErrors(form: Record<string, string>): Partial<
 
   if (firstReceive == null) return errors;
 
-  if (firstReply != null && firstReply < firstReceive) {
+  // Times are clock-only; a reply shortly after midnight counts as the next day.
+  const sinceReceive = (t: number | null) =>
+    t != null ? elapsedClockMins(firstReceive, t) : undefined;
+
+  if (firstReply != null && sinceReceive(firstReply) === null) {
     errors.firstReply = buildBeforeReceiveError(
       "firstReply",
       String(form.firstReply ?? ""),
       receiveRaw,
     );
   }
-  if (clientLast != null && clientLast < firstReceive) {
+  if (clientLast != null && sinceReceive(clientLast) === null) {
     errors.clientLastReply = buildBeforeReceiveError(
       "clientLastReply",
       String(form.clientLastReply ?? ""),
       receiveRaw,
     );
   }
-  if (analystLast != null && analystLast < firstReceive) {
+  if (analystLast != null && sinceReceive(analystLast) === null) {
     errors.analystLastReply = buildBeforeReceiveError(
       "analystLastReply",
       String(form.analystLastReply ?? ""),
@@ -183,10 +193,12 @@ export function getRecordTimeFieldErrors(form: Record<string, string>): Partial<
     );
   }
 
+  const replyAt = sinceReceive(firstReply);
+  const lastAt = sinceReceive(analystLast);
   if (
-    firstReply != null &&
-    analystLast != null &&
-    analystLast < firstReply &&
+    replyAt != null &&
+    lastAt != null &&
+    lastAt < replyAt &&
     !errors.analystLastReply
   ) {
     errors.analystLastReply = buildBeforeFirstReplyError(
@@ -281,6 +293,8 @@ export function buildChatRecordFromForm(
     profile: String(form.profile || "").trim(),
     clientName: String(form.clientName || "").trim(),
     phone: form.phone,
+    shift: String(form.shift || "").trim(),
+    clientMessage: String(form.clientMessage || "").trim(),
     chatDirection: normalizeChatDirection(form.chatDirection),
     note: storedNote,
     firstReceive: form.firstReceive,

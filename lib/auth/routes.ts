@@ -9,6 +9,8 @@ export const ROUTES = {
   admin: "/admin",
   leads: "/leads",
   leadNotes: "/lead-notes",
+  whatsappAudit: "/whatsapp-audit",
+  logWhatsappAudit: "/log-whatsapp-audit",
 } as const;
 
 export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES];
@@ -20,7 +22,9 @@ export type TabId =
   | "notes"
   | "admin"
   | "leads"
-  | "leadNotes";
+  | "leadNotes"
+  | "whatsappAudit"
+  | "logWhatsappAudit";
 
 export const TAB_TO_PATH: Record<TabId, AppRoute> = {
   dashboard: ROUTES.dashboard,
@@ -30,25 +34,35 @@ export const TAB_TO_PATH: Record<TabId, AppRoute> = {
   admin: ROUTES.admin,
   leads: ROUTES.leads,
   leadNotes: ROUTES.leadNotes,
+  whatsappAudit: ROUTES.whatsappAudit,
+  logWhatsappAudit: ROUTES.logWhatsappAudit,
 };
 
 export const PATH_TO_TAB: Record<string, TabId> = Object.fromEntries(
   Object.entries(TAB_TO_PATH).map(([tabId, path]) => [path, tabId as TabId]),
 );
 
-export function tabsForRole(role: UserRole | string): TabId[] {
+/**
+ * `isAdmin` marks a super admin (unrestricted team lead).
+ * WhatsApp Audit: analysts log entries on `logWhatsappAudit`; main team leads and
+ * super admins review them on `whatsappAudit`.
+ */
+export function tabsForRole(role: UserRole | string, isAdmin = false): TabId[] {
   if (role === "teamLead") {
-    return ["dashboard", "records", "notes", "admin"];
+    return isAdmin
+      ? ["dashboard", "records", "notes", "admin", "whatsappAudit"]
+      : ["dashboard", "records", "notes", "admin"];
   }
   if (role === "mainTeamLead") {
-    return ["dashboard", "records", "leads", "leadNotes"];
+    return ["dashboard", "records", "leads", "leadNotes", "whatsappAudit"];
   }
-  return ["dashboard", "log", "records", "notes"];
+  return ["dashboard", "log", "logWhatsappAudit", "records", "notes"];
 }
 
 export function routeAllowedForRole(
   pathname: string,
   role: UserRole | string,
+  isAdmin = false,
 ): boolean {
   const normalized =
     pathname.length > 1 && pathname.endsWith("/")
@@ -56,7 +70,7 @@ export function routeAllowedForRole(
       : pathname;
   const tab = PATH_TO_TAB[normalized];
   if (!tab) return normalized === ROUTES.dashboard;
-  return tabsForRole(role).includes(tab);
+  return tabsForRole(role, isAdmin).includes(tab);
 }
 
 export function roleLabel(role: UserRole | string): string {

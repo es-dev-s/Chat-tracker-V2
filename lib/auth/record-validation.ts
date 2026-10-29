@@ -1,4 +1,5 @@
 import { normalizeChatDirection } from "@/lib/records/chat-direction";
+import { elapsedClockMins } from "@/lib/utils/format-duration";
 /**
  * Validates `chatDirection` ('in' | 'out'). Required on create (except
  * lead-note-only rows). On update a
@@ -72,16 +73,25 @@ export function validateRecordTimeOrder(record: Record<string, unknown>): void {
   const firstReply = parseClockMinutes(record?.firstReply);
   const clientLast = parseClockMinutes(record?.clientLastReply);
   const analystLast = parseClockMinutes(record?.analystLastReply);
-  if (firstReceive != null && firstReply != null && firstReply < firstReceive) {
+  // Times are clock-only; a reply shortly after midnight counts as the next day.
+  const sinceReceive = (t: number | null) =>
+    firstReceive != null && t != null ? elapsedClockMins(firstReceive, t) : undefined;
+  if (firstReply != null && sinceReceive(firstReply) === null) {
     throw new Error("TIME_ORDER_INVALID_FIRST_REPLY");
   }
-  if (firstReceive != null && clientLast != null && clientLast < firstReceive) {
+  if (clientLast != null && sinceReceive(clientLast) === null) {
     throw new Error("TIME_ORDER_INVALID_CLIENT_LAST_REPLY");
   }
-  if (firstReceive != null && analystLast != null && analystLast < firstReceive) {
+  if (analystLast != null && sinceReceive(analystLast) === null) {
     throw new Error("TIME_ORDER_INVALID_ANALYST_LAST");
   }
-  if (firstReply != null && analystLast != null && analystLast < firstReply) {
-    throw new Error("TIME_ORDER_INVALID_ANALYST_LAST");
+  if (firstReply != null && analystLast != null) {
+    const replyAt = sinceReceive(firstReply);
+    const lastAt = sinceReceive(analystLast);
+    const outOfOrder =
+      replyAt != null && lastAt != null
+        ? lastAt < replyAt
+        : elapsedClockMins(firstReply, analystLast) == null;
+    if (outOfOrder) throw new Error("TIME_ORDER_INVALID_ANALYST_LAST");
   }
 }

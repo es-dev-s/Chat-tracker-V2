@@ -14,6 +14,7 @@ import {
 } from "@/lib/workspace/cache";
 import type { SessionUser } from "@/lib/auth/constants";
 import { notifUserKey } from "@/lib/auth/scoping";
+import { overlayPendingReplyTimings } from "@/lib/records/pending-reply-timing";
 
 export type SyncSource = "idle" | "cache" | "network" | "syncing";
 
@@ -146,7 +147,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({
       version: payload.version,
       fetchedAt: payload.fetchedAt,
-      records: payload.records,
+      records: overlayPendingReplyTimings(payload.records),
       users: payload.users,
       teams: payload.teams,
       profiles: payload.profiles,

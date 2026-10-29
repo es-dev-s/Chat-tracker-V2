@@ -17,6 +17,21 @@ export function mapWriteError(err: unknown): NextResponse {
     /could not find|does not exist|schema cache|undefined_column|42703|PGRST204/i.test(code) &&
     code.toLowerCase().includes("chat_direction");
 
+  const missingAuditColumn =
+    /could not find|does not exist|schema cache|undefined_column|42703|PGRST204/i.test(code) &&
+    /\bshift\b|client_message/i.test(code);
+
+  if (missingAuditColumn) {
+    return NextResponse.json(
+      {
+        error: "DATABASE_SCHEMA_OUTDATED",
+        message:
+          "The database is missing the Shift and Client message fields. Apply the whatsapp_audit_fields migration, then retry.",
+      },
+      { status: 503 },
+    );
+  }
+
   if (missingDirectionColumn) {
     return NextResponse.json(
       {

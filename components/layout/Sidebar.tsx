@@ -14,11 +14,11 @@ import AvatarMark from "@/components/ui/AvatarMark";
 import { useGlobalFiltersActiveCount } from "./GlobalFiltersPanel";
 import { useSidebarStore } from "@/store/sidebar-store";
 
-const FILTER_AWARE_TABS = new Set<TabId>(["dashboard", "records", "notes", "leads", "leadNotes"]);
+const FILTER_AWARE_TABS = new Set<TabId>(["dashboard", "records", "notes", "leads", "leadNotes", "whatsappAudit"]);
 
 export default function Sidebar({ user }: { user: SessionUser }) {
   const pathname = usePathname();
-  const tabs = tabsForRole(user.role);
+  const tabs = tabsForRole(user.role, user.isAdmin === true);
   const displayName = makeDisplayName(user);
   const activeFilterCount = useGlobalFiltersActiveCount();
   const collapsed = useSidebarStore((s) => s.collapsed);

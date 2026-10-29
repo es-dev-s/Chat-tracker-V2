@@ -17,9 +17,23 @@ function chatDirectionColumn(rec: Record<string, unknown>): { chat_direction?: s
   return direction ? { chat_direction: direction } : {};
 }
 
+/**
+ * WhatsApp Audit fields. Only sent when filled in, so logging chats keeps working
+ * on a database that has not had the whatsapp_audit_fields migration yet.
+ */
+function auditColumns(rec: Record<string, unknown>): { shift?: string; client_message?: string } {
+  const shift = normalizeFollowUpText(rec.shift, 40);
+  const clientMessage = normalizeFollowUpText(rec.clientMessage ?? rec.client_message, 2000);
+  return {
+    ...(shift ? { shift } : {}),
+    ...(clientMessage ? { client_message: clientMessage } : {}),
+  };
+}
+
 function appRecordToDbRowForInsert(rec: Record<string, unknown>) {
   return {
     ...chatDirectionColumn(rec),
+    ...auditColumns(rec),
     date: rec.date ?? "",
     analyst: rec.analyst ?? "",
     team: rec.team ?? "",
@@ -87,6 +101,8 @@ function dbChatRowToApp(row: Record<string, unknown>): ChatRecord | null {
     chatDirection: normalizeChatDirection(row.chat_direction),
     replyTiming: normalizeReplyTiming(row.reply_timing),
     requiredDocuments: String(row.required_documents ?? ""),
+    shift: String(row.shift ?? ""),
+    clientMessage: String(row.client_message ?? ""),
     classSessionDate: String(row.class_session_date ?? ""),
     classSessionTime: String(row.class_session_time ?? ""),
     classSessionInstructions: String(row.class_session_instructions ?? ""),

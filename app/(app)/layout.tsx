@@ -25,7 +25,7 @@ export default async function AppLayout({
 
   const hydrated = hydrateSessionUser(user);
   const pathname = (await headers()).get("x-pathname") ?? "";
-  if (pathname && !routeAllowedForRole(pathname, hydrated.role)) {
+  if (pathname && !routeAllowedForRole(pathname, hydrated.role, hydrated.isAdmin === true)) {
     redirect(ROUTES.dashboard);
   }
   const initialWorkspace = await loadWorkspaceBootstrap(hydrated);

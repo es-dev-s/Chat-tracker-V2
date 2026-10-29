@@ -13,6 +13,8 @@ const PROTECTED_PREFIXES = [
   "/admin",
   "/leads",
   "/lead-notes",
+  "/whatsapp-audit",
+  "/log-whatsapp-audit",
 ];
 
 function isProtectedPath(pathname: string): boolean {
@@ -72,5 +74,7 @@ export const config = {
     "/admin/:path*",
     "/leads/:path*",
     "/lead-notes/:path*",
+    "/whatsapp-audit/:path*",
+    "/log-whatsapp-audit/:path*",
   ],
 };

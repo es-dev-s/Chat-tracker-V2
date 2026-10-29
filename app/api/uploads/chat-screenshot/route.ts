@@ -8,6 +8,12 @@ import {
   uploadChatScreenshotObject,
   type ChatScreenshotKind,
 } from "@/lib/db/chat-screenshots";
+import { viewerCanSeeScreenshotPath } from "@/lib/db/records";
+
+/** Folder the upload route stores this viewer's screenshots under. */
+function viewerScreenshotFolder(viewerId: string | number): string {
+  return `${String(viewerId).replace(/[^a-zA-Z0-9]/g, "") || "user"}/`;
+}
 
 export const runtime = "nodejs";
 
@@ -76,6 +82,13 @@ export async function GET(request: Request) {
     const path = new URL(request.url).searchParams.get("path") || "";
     if (!isSafeChatScreenshotPath(path)) {
       return NextResponse.json({ error: "SCREENSHOT_PATH_INVALID" }, { status: 400 });
+    }
+
+    // Own uploads (including ones not saved to a record yet), or a screenshot on
+    // a record this viewer is allowed to see.
+    const ownUpload = path.startsWith(viewerScreenshotFolder(viewer.id));
+    if (!ownUpload && !(await viewerCanSeeScreenshotPath(viewer, path))) {
+      return NextResponse.json({ error: "SCREENSHOT_NOT_FOUND" }, { status: 404 });
     }
 
     const { bytes, contentType } = await downloadChatScreenshotObject(path);

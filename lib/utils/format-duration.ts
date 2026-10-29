@@ -9,10 +9,26 @@ export function parseTime(t = ""): number | null {
   return h * 60 + m + s / 60;
 }
 
+/** Longest gap treated as a chat that crossed midnight (e.g. 11:50 PM -> 12:10 AM). */
+export const MIDNIGHT_WRAP_MAX_MINS = 12 * 60;
+
+/**
+ * Minutes from clock time `from` to clock time `to` (both minutes since 00:00).
+ * A later-looking earlier time is read as "after midnight" when the wrapped gap
+ * is at most MIDNIGHT_WRAP_MAX_MINS; otherwise it is out of order and returns null.
+ */
+export function elapsedClockMins(from: number | null, to: number | null): number | null {
+  if (from == null || to == null) return null;
+  if (to >= from) return to - from;
+  const wrapped = to + 24 * 60 - from;
+  return wrapped <= MIDNIGHT_WRAP_MAX_MINS ? wrapped : null;
+}
+
 export function diffMins(t1: string, t2: string): number | null {
   const a = parseTime(t1);
   const b = parseTime(t2);
-  return a != null && b != null ? b - a : null;
+  if (a == null || b == null) return null;
+  return elapsedClockMins(a, b) ?? b - a;
 }
 
 export function fmtMins(minutes: number | null | undefined): string {

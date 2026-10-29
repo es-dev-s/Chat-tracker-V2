@@ -25,6 +25,10 @@ export type ChatRecord = {
   /** Optional reply timing slug. Null when not set. */
   replyTiming?: ReplyTiming | null;
   requiredDocuments?: string;
+  /** Analyst shift, e.g. "3 to 7" (WhatsApp Audit). Empty when not set. */
+  shift?: string;
+  /** Client's message text (WhatsApp Audit). Empty when not set. */
+  clientMessage?: string;
   classSessionDate?: string;
   classSessionTime?: string;
   classSessionInstructions?: string;
@@ -69,6 +73,8 @@ function dbChatRowToApp(row: Record<string, unknown>): ChatRecord | null {
     chatDirection: normalizeChatDirection(row.chat_direction),
     replyTiming: normalizeReplyTiming(row.reply_timing),
     requiredDocuments: String(row.required_documents ?? ""),
+    shift: String(row.shift ?? ""),
+    clientMessage: String(row.client_message ?? ""),
     classSessionDate: String(row.class_session_date ?? ""),
     classSessionTime: String(row.class_session_time ?? ""),
     classSessionInstructions: String(row.class_session_instructions ?? ""),
@@ -120,6 +126,8 @@ function dbFingerprintRow(row: Record<string, unknown>) {
       row.lead_note_updated_at != null ? String(row.lead_note_updated_at) : null,
     amountToPay: String(row.amount_to_pay ?? ""),
     requiredDocuments: String(row.required_documents ?? ""),
+    shift: String(row.shift ?? ""),
+    clientMessage: String(row.client_message ?? ""),
     classSessionDate: String(row.class_session_date ?? ""),
     classSessionTime: String(row.class_session_time ?? ""),
     classSessionInstructions: String(row.class_session_instructions ?? ""),
@@ -230,6 +238,33 @@ export async function readRecordByIdForViewer(
     const scoped = filterRecordsForViewer(viewer, [record]);
     return scoped.length ? (scoped[0] as ChatRecord) : null;
   });
+}
+
+/**
+ * True when the viewer may see a record that references this screenshot path
+ * (same role scoping as the Records table).
+ */
+export async function viewerCanSeeScreenshotPath(
+  viewer: Partial<AppUser>,
+  path: string,
+): Promise<boolean> {
+  const p = String(path ?? "").trim();
+  if (!p) return false;
+  for (const column of ["first_chat_screenshot", "last_chat_screenshot"] as const) {
+    const found = await withSupabaseFailover(async (sb) => {
+      let query = sb.from("chat_records").select("*").eq(column, p).limit(5);
+      query = applyRecordScopeToQuery(query as never, viewer) as typeof query;
+      const res = await query;
+      throwIfRetryableSupabaseError(res.error, res.status, "read screenshot owner");
+      if (res.error) throw new Error(`read screenshot owner: ${res.error.message}`);
+      const mapped = (res.data || [])
+        .map((row) => dbChatRowToApp(row as Record<string, unknown>))
+        .filter((r): r is ChatRecord => r !== null);
+      return filterRecordsForViewer(viewer, mapped).length > 0;
+    });
+    if (found) return true;
+  }
+  return false;
 }
 
 export async function readRecords(): Promise<ChatRecord[]> {

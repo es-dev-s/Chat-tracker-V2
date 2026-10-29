@@ -1,5 +1,7 @@
 import {
   BookMarked,
+  ClipboardCheck,
+  ClipboardPen,
   LayoutDashboard,
   MessageSquarePlus,
   NotebookPen,
@@ -43,6 +45,14 @@ export const TAB_META: Record<TabId, TabMeta> = {
   leadNotes: {
     label: "Notes",
     Icon: BookMarked,
+  },
+  whatsappAudit: {
+    label: "WhatsApp Audit",
+    Icon: ClipboardCheck,
+  },
+  logWhatsappAudit: {
+    label: "Log WhatsApp Audit",
+    Icon: ClipboardPen,
   },
 };
 

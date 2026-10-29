@@ -1,3 +1,7 @@
+import {
+  clearPendingReplyTiming,
+  setPendingReplyTiming,
+} from "@/lib/records/pending-reply-timing";
 import type { ChatRecord } from "@/lib/db/records";
 import type { ReplyTiming } from "@/lib/records/reply-timing";
 import { invalidateWorkspaceClientCache } from "@/lib/workspace/cache";
@@ -89,23 +93,46 @@ export async function patchChatRecord(record: ChatRecord | Record<string, unknow
   return saved;
 }
 
-export async function patchRecordReplyTiming(
+type ReplyTimingQueue = {
+  /** Bumped on every pick; only the newest pick is sent and applied. */
+  latest: number;
+  /** Last value the server confirmed (rollback target). */
+  confirmed: ReplyTiming | null;
+  /** Saves for one record run one at a time, so the server sees them in order. */
+  chain: Promise<unknown>;
+};
+
+const replyTimingQueues = new Map<number, ReplyTimingQueue>();
+
+/**
+ * Optimistic, race-safe reply-timing save. Rapid picks on the same row are
+ * serialized and coalesced (last pick wins); a stale response or a failed older
+ * save never overwrites a newer pick. Resolves to null when a newer pick
+ * superseded this one before it was sent.
+ */
+export function patchRecordReplyTiming(
   id: number,
   replyTiming: ReplyTiming | null,
-): Promise<ChatRecord> {
-  const prev = useWorkspaceStore.getState().records.find((r) => r.id === id);
-  const prevTiming = prev?.replyTiming ?? null;
+): Promise<ChatRecord | null> {
+  let queue = replyTimingQueues.get(id);
+  if (!queue) {
+    const prev = useWorkspaceStore.getState().records.find((r) => r.id === id);
+    queue = { latest: 0, confirmed: prev?.replyTiming ?? null, chain: Promise.resolve() };
+    replyTimingQueues.set(id, queue);
+  }
+  const q = queue;
+  const version = ++q.latest;
+  setPendingReplyTiming(id, replyTiming);
   useWorkspaceStore.getState().patchRecordReplyTiming(id, replyTiming);
-  try {
-    const res = await fetch(
-      `/api/records/${encodeURIComponent(String(id))}/reply-timing`,
-      {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ replyTiming }),
-      },
-    );
+
+  const run = q.chain.then(async (): Promise<ChatRecord | null> => {
+    if (version !== q.latest) return null;
+    const res = await fetch(`/api/records/${encodeURIComponent(String(id))}/reply-timing`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ replyTiming }),
+    });
     if (res.status === 401) {
       void useAuthStore.getState().logout();
       throw new Error("Session expired.");
@@ -113,14 +140,32 @@ export async function patchRecordReplyTiming(
     if (!res.ok) throw new Error(await parseApiError(res));
     const data = await res.json();
     const saved = data.record as ChatRecord;
-    useWorkspaceStore
-      .getState()
-      .patchRecordReplyTiming(saved.id, saved.replyTiming ?? null);
+    q.confirmed = saved.replyTiming ?? null;
     return saved;
-  } catch (err) {
-    useWorkspaceStore.getState().patchRecordReplyTiming(id, prevTiming);
-    throw err;
-  }
+  });
+  q.chain = run.catch(() => undefined);
+
+  const settle = () => {
+    if (version !== q.latest) return false;
+    replyTimingQueues.delete(id);
+    clearPendingReplyTiming(id);
+    return true;
+  };
+
+  return run.then(
+    (saved) => {
+      if (settle()) {
+        useWorkspaceStore.getState().patchRecordReplyTiming(id, q.confirmed);
+      }
+      return saved;
+    },
+    (err) => {
+      if (settle()) {
+        useWorkspaceStore.getState().patchRecordReplyTiming(id, q.confirmed);
+      }
+      throw err;
+    },
+  );
 }
 
 export async function acknowledgeChatRecord(id: number): Promise<ChatRecord> {

@@ -32,10 +32,10 @@ export default function AppShell({
   }, [hydrate]);
 
   useEffect(() => {
-    if (!routeAllowedForRole(pathname, user.role)) {
+    if (!routeAllowedForRole(pathname, user.role, user.isAdmin === true)) {
       router.replace(ROUTES.dashboard);
     }
-  }, [pathname, user.role, router]);
+  }, [pathname, user.role, user.isAdmin, router]);
 
   const tab = (PATH_TO_TAB[pathname] ?? "dashboard") as TabId;
 

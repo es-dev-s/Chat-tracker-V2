@@ -1,5 +1,6 @@
 "use client";
 
+import { hasPendingReplyTiming } from "@/lib/records/pending-reply-timing";
 import { useEffect, useRef } from "react";
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -11,6 +12,16 @@ import {
   REPLY_TIMING_REALTIME_TOPIC,
 } from "@/lib/realtime/reply-timing-channel";
 import { normalizeReplyTiming } from "@/lib/records/reply-timing";
+import {
+  WHATSAPP_AUDIT_REALTIME_EVENT,
+  WHATSAPP_AUDIT_REALTIME_TOPIC,
+  type WhatsAppAuditRealtimeEvent,
+} from "@/lib/realtime/whatsapp-audit-channel";
+import {
+  hasPendingAuditCategory,
+  requestAuditRefresh,
+  useWhatsAppAuditStore,
+} from "@/store/whatsapp-audit-store";
 import { useWorkspaceStore } from "@/store/workspace-store";
 
 type RealtimeNode = {
@@ -60,10 +71,24 @@ function applyAcknowledgement(payload: AcknowledgementPayload | undefined) {
 function applyReplyTiming(payload: ReplyTimingPayload | undefined) {
   const id = Number(payload?.id);
   if (!Number.isFinite(id) || id <= 0) return;
+  // This screen has its own newer pick in flight; its save result wins.
+  if (hasPendingReplyTiming(id)) return;
   // Unknown / empty payloads become null (safe before migration too).
   useWorkspaceStore
     .getState()
     .patchRecordReplyTiming(id, normalizeReplyTiming(payload?.replyTiming));
+}
+
+function applyAuditChange(payload: Partial<WhatsAppAuditRealtimeEvent> | undefined) {
+  const id = Number(payload?.id);
+  if (!Number.isFinite(id) || id <= 0) return;
+  if (payload?.op === "deleted") {
+    useWhatsAppAuditStore.getState().remove(id);
+    return;
+  }
+  // The payload carries no row data; refetch through the role-scoped API.
+  // A pick still saving on this screen is protected by the pending overlay.
+  requestAuditRefresh(hasPendingAuditCategory(id) ? 600 : 150);
 }
 
 /**
@@ -129,7 +154,14 @@ export default function SupabaseRealtimeBridge({
         })
         .subscribe(onChannelStatus);
 
-      channelsRef.current = [ackChannel, replyChannel];
+      const auditChannel = client
+        .channel(WHATSAPP_AUDIT_REALTIME_TOPIC)
+        .on("broadcast", { event: WHATSAPP_AUDIT_REALTIME_EVENT }, ({ payload }) => {
+          applyAuditChange(payload as Partial<WhatsAppAuditRealtimeEvent>);
+        })
+        .subscribe(onChannelStatus);
+
+      channelsRef.current = [ackChannel, replyChannel, auditChannel];
     };
 
     subscribe(0);
