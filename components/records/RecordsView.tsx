@@ -34,13 +34,6 @@ import LogTimeFieldHint from "@/components/log/LogTimeFieldHint";
 import ChatScreenshotField from "@/components/records/ChatScreenshotField";
 import ChatScreenshotThumb from "@/components/records/ChatScreenshotThumb";
 import RecordDetailModal from "@/components/records/RecordDetailModal";
-import ChatDirectionToggle, {
-  ChatDirectionBadge,
-  ChatDirectionLabel,
-} from "@/components/ui/ChatDirectionToggle";
-import ReplyTimingSelect, { ReplyTimingText } from "@/components/ui/ReplyTimingSelect";
-import { patchRecordReplyTiming } from "@/lib/api/mutations";
-import { normalizeReplyTiming, type ReplyTiming } from "@/lib/records/reply-timing";
 import { useRecordsEditScroll } from "@/hooks/useRecordsEditScroll";
 
 const PAGE_SIZE = 25;
@@ -81,8 +74,6 @@ const LEDGER_HEADERS: { label: string; className?: string }[] = [
   { label: "Profile", className: "ct-records-table__col-profile" },
   { label: "Client name", className: "ct-records-table__col-client" },
   { label: "Phone", className: "ct-records-table__col-phone" },
-  { label: "Device", className: "ct-records-table__col-direction" },
-  { label: "Reply timing", className: "ct-records-table__col-reply-timing" },
   { label: "1st Receive", className: "ct-records-table__col-time" },
   { label: "1st Shot", className: "ct-records-table__col-shot" },
   { label: "1st Reply", className: "ct-records-table__col-time" },
@@ -130,9 +121,6 @@ export default function RecordsView() {
   const [detailId, setDetailId] = useState<number | null>(null);
   const [acknowledgingId, setAcknowledgingId] = useState<number | null>(null);
   const [acknowledgeError, setAcknowledgeError] = useState("");
-  const [replyTimingBusyId, setReplyTimingBusyId] = useState<number | null>(null);
-  const [replyTimingError, setReplyTimingError] = useState("");
-  const [replyTimingSavedId, setReplyTimingSavedId] = useState<number | null>(null);
   const scrollAnchorRef = useRef<number | null>(null);
 
   const role = user?.role ?? "analyst";
@@ -142,7 +130,6 @@ export default function RecordsView() {
   const showAckColumn =
     role === "mainTeamLead" || (role === "teamLead" && user?.isAdmin === true);
   /** Same roles as acknowledge: mainTeamLead + unrestricted (admin) teamLead. */
-  const canEditReplyTiming = showAckColumn;
   const ledgerHeaders = (() => {
     const headers = showRowActions
       ? [...LEDGER_HEADERS]
@@ -337,31 +324,7 @@ export default function RecordsView() {
     }
   };
 
-  const saveReplyTiming = async (
-    record: ChatRecord,
-    next: ReplyTiming | "",
-  ) => {
-    const value = next || null;
-    const current = normalizeReplyTiming(record.replyTiming) ?? null;
-    if (value === current) return;
-    if (replyTimingBusyId != null) return;
-    setReplyTimingBusyId(record.id);
-    setReplyTimingError("");
-    setReplyTimingSavedId(null);
-    try {
-      await patchRecordReplyTiming(record.id, value);
-      setReplyTimingSavedId(record.id);
-      window.setTimeout(() => {
-        setReplyTimingSavedId((id) => (id === record.id ? null : id));
-      }, 1600);
-    } catch (e) {
-      setReplyTimingError(
-        e instanceof Error ? e.message : "Could not update reply timing.",
-      );
-    } finally {
-      setReplyTimingBusyId(null);
-    }
-  };
+
 
   const acknowledgeRow = async (record: ChatRecord) => {
     if (acknowledgingId != null) return;
@@ -501,20 +464,6 @@ export default function RecordsView() {
                 onChange={(e) => setEditF("team", e.target.value)}
                 placeholder="Team"
               />
-            </div>
-            <div style={{ marginBottom: 14, maxWidth: 360 }}>
-              <ChatDirectionLabel id="records-edit-direction-label" />
-              <ChatDirectionToggle
-                id="records-edit-direction"
-                aria-labelledby="records-edit-direction-label"
-                value={editForm.chatDirection}
-                onChange={(v) => setEditF("chatDirection", v)}
-              />
-              {!editForm.chatDirection ? (
-                <div style={{ color: C.muted, fontSize: 12, marginTop: 6 }}>
-                  Device not recorded for this older chat. Optional here.
-                </div>
-              ) : null}
             </div>
             <div style={{ marginBottom: 14 }}>
               <LogRemarksFields
@@ -682,9 +631,6 @@ export default function RecordsView() {
               {acknowledgeError ? (
                 <span className="ct-records-ledger__ack-error">{acknowledgeError}</span>
               ) : null}
-              {replyTimingError ? (
-                <span className="ct-records-ledger__ack-error">{replyTimingError}</span>
-              ) : null}
             </div>
           </div>
           <RecordsPaginationBar
@@ -753,36 +699,6 @@ export default function RecordsView() {
                     </td>
                     <td className="ct-records-table__col-phone">
                       <LedgerTextCell value={r.phone || ""} />
-                    </td>
-                    <td className="ct-records-table__col-direction">
-                      <ChatDirectionBadge value={r.chatDirection} />
-                    </td>
-                    <td
-                      className="ct-records-table__col-reply-timing"
-                      onClick={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
-                    >
-                      {canEditReplyTiming ? (
-                        <div className="ct-records-reply-timing-cell">
-                          <ReplyTimingSelect
-                            compact
-                            disabled={replyTimingBusyId === r.id}
-                            value={r.replyTiming}
-                            onChange={(v) => void saveReplyTiming(r, v)}
-                          />
-                          {replyTimingBusyId === r.id ? (
-                            <span className="ct-records-reply-timing-cell__status">
-                              Saving…
-                            </span>
-                          ) : replyTimingSavedId === r.id ? (
-                            <span className="ct-records-reply-timing-cell__status ct-records-reply-timing-cell__status--ok">
-                              Saved
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <ReplyTimingText value={r.replyTiming} />
-                      )}
                     </td>
                     <td className="ct-records-table__col-time">
                       {formatStoredTimeDisplay(r.firstReceive) || "—"}

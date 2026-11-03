@@ -28,7 +28,8 @@ import {
   type SaveState,
 } from "./audit-ui";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
+const DEFAULT_PAGE_SIZE = 20;
 const SKELETON_ROWS = 10;
 const ALL = "__all__";
 const NOT_SET = "__not_set__";
@@ -77,6 +78,7 @@ export default function WhatsAppAuditView() {
   const [category, setCategory] = useState(ALL);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
+  const [PAGE_SIZE, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [saveStates, setSaveStates] = useState<Record<number, SaveState>>({});
   const [error, setError] = useState("");
   /** Rows edited under the current filters stay visible until the filters change. */
@@ -415,6 +417,23 @@ export default function WhatsAppAuditView() {
             )}
           </span>
           <div className="ct-wa-pager" role="group" aria-label="Pagination">
+            <label className="ct-wa-pager__size">
+              Rows
+              <select
+                value={PAGE_SIZE}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(0);
+                }}
+                aria-label="Rows per page"
+              >
+                {PAGE_SIZE_OPTIONS.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               type="button"
               disabled={activePage <= 0}
