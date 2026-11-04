@@ -25,6 +25,10 @@ export type WhatsAppAudit = {
   replyTime: string;
   category: ReplyTiming | null;
   clientMessage: string;
+  /** ISO date the client message arrived, or "" (older rows: same as `date`). */
+  clientMsgDate: string;
+  /** ISO date of the reply, or "" (older rows: inferred from the clock times). */
+  replyDate: string;
 };
 
 export type WhatsAppAuditInput = {
@@ -37,6 +41,10 @@ export type WhatsAppAuditInput = {
   replyTime: string;
   category: ReplyTiming | null;
   clientMessage: string;
+  /** Optional. "" = same day as `date`. */
+  clientMsgDate?: string;
+  /** Optional. "" = inferred from the clock times. Ignored without a reply time. */
+  replyDate?: string;
 };
 
 export type WhatsAppAuditField = keyof WhatsAppAuditInput;
@@ -52,6 +60,8 @@ export const AUDIT_FIELDS: readonly WhatsAppAuditField[] = [
   "replyTime",
   "category",
   "clientMessage",
+  "clientMsgDate",
+  "replyDate",
 ];
 
 export const AUDIT_LIMITS = {
@@ -73,7 +83,49 @@ export function emptyAuditInput(date = ""): WhatsAppAuditInput {
     replyTime: "",
     category: null,
     clientMessage: "",
+    clientMsgDate: "",
+    replyDate: "",
   };
+}
+
+function addDaysIso(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+/**
+ * Latest date an entry may use. The server allows "today" in the furthest-ahead
+ * time zone (UTC+14) so a user's local today is never rejected; the form passes
+ * the browser's local today.
+ */
+export function latestAuditDate(): string {
+  return new Date(Date.now() + 14 * 3600_000).toISOString().slice(0, 10);
+}
+
+/** Received day: explicit date, else the entry date. */
+export function effectiveReceivedDate(a: { date: string; clientMsgDate?: string }): string {
+  return a.clientMsgDate || a.date;
+}
+
+/**
+ * Reply day: explicit date, else inferred (a reply clock earlier than the
+ * received clock is the next day). "" when there is no reply time.
+ */
+export function effectiveReplyDate(a: {
+  date: string;
+  clientMsgDate?: string;
+  clientMsgReceived: string;
+  replyTime: string;
+  replyDate?: string;
+}): string {
+  if (!a.replyTime) return "";
+  if (a.replyDate) return a.replyDate;
+  const recvDate = effectiveReceivedDate(a);
+  if (!isIsoDate(recvDate)) return "";
+  const r = parseTime(a.clientMsgReceived);
+  const p = parseTime(a.replyTime);
+  if (r == null || p == null) return recvDate;
+  return p < r ? addDaysIso(recvDate, 1) : recvDate;
 }
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -116,10 +168,14 @@ export const REPLY_ORDER_MESSAGE =
  * Validates a full entry. Shared by the form (inline errors) and the API
  * (authoritative). Returns cleaned values plus per-field messages.
  */
-export function validateAuditInput(raw: unknown): {
+export function validateAuditInput(
+  raw: unknown,
+  opts: { maxDate?: string } = {},
+): {
   value: WhatsAppAuditInput;
   errors: WhatsAppAuditFieldErrors;
 } {
+  const maxDate = opts.maxDate || latestAuditDate();
   const src = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const errors: WhatsAppAuditFieldErrors = {};
 
@@ -146,10 +202,29 @@ export function validateAuditInput(raw: unknown): {
   if (received === null) errors.clientMsgReceived = "Enter a valid time.";
   else if (!received) errors.clientMsgReceived = "Client Msg Received is required.";
 
+  const clientMsgDate = text(src.clientMsgDate);
+  if (clientMsgDate) {
+    if (!isIsoDate(clientMsgDate)) errors.clientMsgDate = "Enter a valid date.";
+    else if (clientMsgDate > maxDate) errors.clientMsgDate = "Date can't be in the future.";
+  }
+
   const reply = normalizeAuditTime(src.replyTime);
+  // A reply date only means something with a reply time.
+  const replyDate = reply ? text(src.replyDate) : "";
+  if (replyDate) {
+    if (!isIsoDate(replyDate)) errors.replyDate = "Enter a valid date.";
+    else if (replyDate > maxDate) errors.replyDate = "Date can't be in the future.";
+  }
   if (reply === null) errors.replyTime = "Enter a valid time.";
   else if (reply && received) {
-    if (elapsedClockMins(parseTime(received), parseTime(reply)) == null) {
+    if (replyDate && !errors.replyDate && !errors.clientMsgDate && !errors.date) {
+      const recvDay = clientMsgDate || date;
+      if (replyDate < recvDay) {
+        errors.replyDate = "Reply date can't be before the Client Msg Received date.";
+      } else if (`${replyDate}T${reply}` < `${recvDay}T${received}`) {
+        errors.replyTime = "Reply time must be after Client Msg Received.";
+      }
+    } else if (!replyDate && elapsedClockMins(parseTime(received), parseTime(reply)) == null) {
       errors.replyTime = REPLY_ORDER_MESSAGE;
     }
   }
@@ -176,6 +251,8 @@ export function validateAuditInput(raw: unknown): {
       replyTime: reply || "",
       category,
       clientMessage,
+      clientMsgDate,
+      replyDate,
     },
     errors,
   };

@@ -13,8 +13,9 @@ export function withValidatedChatDirection<T extends Record<string, unknown>>(
   const raw = record?.chatDirection ?? record?.chat_direction;
   const empty = raw === undefined || raw === null || String(raw).trim() === "";
   if (empty) {
-    // Main-lead "note only" rows are not chats, so they carry no direction.
-    if (!existingRow && !record?.isLeadNoteOnly) throw new Error("CHAT_DIRECTION_REQUIRED");
+    // Device is optional: Log Chat no longer asks for it. New rows without a
+    // direction store NULL (shown as "—", same as legacy rows); edits keep the
+    // row's saved direction.
     const kept = normalizeChatDirection(existingRow?.chatDirection ?? existingRow?.chat_direction);
     const { chat_direction: _legacy, ...rest } = record as Record<string, unknown>;
     void _legacy;

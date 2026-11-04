@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import AnalystAvatarCell from "@/components/notes/AnalystAvatarCell";
+import { useEffectiveDashboardFilters } from "@/hooks/useEffectiveDashboardFilters";
 import AnalystNotesPaginationBar from "@/components/notes/AnalystNotesPaginationBar";
 import {
   ANALYST_NOTES_PAGE_SIZE,
@@ -310,9 +311,13 @@ export default function NotesTabsPanel({
   const displayRows =
     activeView === "analyst" ? pagination.slice : mainLeadRows;
 
+  // Reset only when the user changes filters — not when realtime adds/removes a row,
+  // which used to snap the pager back to page 1 right after clicking Next.
+  // paginateRows clamps the page if the list shrinks.
+  const notesFilters = useEffectiveDashboardFilters();
   useEffect(() => {
     setAnalystNotesPage(0);
-  }, [analystRows.length, profileFilterKey]);
+  }, [notesFilters, profileFilterKey]);
 
   const tabs = [
     { id: "analyst" as const, label: "Chat Analyst Notes", count: analystRows.length },

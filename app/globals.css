@@ -7259,3 +7259,38 @@ button:disabled {
 @media (prefers-reduced-motion: reduce) {
   .ct-wal-banner, .ct-wa-table tbody tr.ct-wal-row--new { animation: none; }
 }
+
+
+/* ── Responsive pagers (Records, Notes, WhatsApp Audit) ─────────
+   Each pager is its own inline-size container so controls wrap to
+   their own row instead of being clipped on narrow cards/screens. */
+.ct-table-pagination,
+.ct-notes-pagination { container-type: inline-size; container-name: pager; min-width: 0; }
+.ct-table-pagination__controls,
+.ct-notes-pagination__controls { flex-wrap: wrap; min-width: 0; }
+.ct-table-pagination__summary,
+.ct-notes-pagination__summary { min-width: 0; }
+@container pager (max-width: 520px) {
+  .ct-table-pagination__summary,
+  .ct-notes-pagination__summary { flex: 1 1 100%; }
+  .ct-table-pagination__controls,
+  .ct-notes-pagination__controls { flex: 1 1 100%; justify-content: space-between; }
+  .ct-table-pagination__page,
+  .ct-notes-pagination__page { min-width: 0; flex: 1 1 auto; }
+  .ct-table-pagination__btn,
+  .ct-notes-pagination__btn { min-height: 40px !important; }
+}
+.ct-wa-foot { min-width: 0; }
+.ct-wa-pager { min-width: 0; }
+@container wa (max-width: 640px) {
+  .ct-wa-foot { padding: 10px 14px; gap: 10px; }
+  .ct-wa-foot > * { flex: 1 1 100%; }
+  .ct-wa-pager { justify-content: space-between; gap: 8px; }
+  .ct-wa-pager__label { min-width: 0; flex: 1 1 auto; }
+  .ct-wa-pager button, .ct-wa-pager__size select { height: 40px; }
+}
+
+/* WhatsApp Audit: time cell with optional day line */
+.ct-wa-timecell { display: inline-flex; flex-direction: column; align-items: flex-end; line-height: 1.2; }
+.ct-wa-timecell__date { font-size: 11px; color: var(--ct-muted, #6b7280); font-variant-numeric: tabular-nums; }
+.ct-wal-timefield { display: grid; gap: 8px; }

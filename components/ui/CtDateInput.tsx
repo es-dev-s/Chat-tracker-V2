@@ -81,6 +81,8 @@ type CtDateInputProps = {
   compact?: boolean;
   id?: string;
   "aria-label"?: string;
+  /** Optional latest selectable ISO date (YYYY-MM-DD). Later days are disabled. */
+  max?: string;
 };
 
 /** YYYY-MM-DD with typing + calendar. Remount via `key` when controlled value changes from outside. */
@@ -91,6 +93,7 @@ export default function CtDateInput({
   compact = false,
   id: idProp,
   "aria-label": ariaLabel = "Date",
+  max,
 }: CtDateInputProps) {
   const wrapId = useId();
   const inputId = idProp || wrapId;
@@ -175,7 +178,7 @@ export default function CtDateInput({
       onChange("");
       return;
     }
-    if (isValidIsoDateString(t)) onChange(t);
+    if (isValidIsoDateString(t) && !(max && t > max)) onChange(t);
     else setDraft(value || "");
   };
 
@@ -288,6 +291,8 @@ export default function CtDateInput({
               <button
                 key={day}
                 type="button"
+                disabled={!!max && toIso(cy, cm, day) > max}
+                style={max && toIso(cy, cm, day) > max ? { opacity: 0.35, cursor: "not-allowed" } : undefined}
                 className={`ct-date-input__popover-day${toIso(cy, cm, day) === value ? " ct-date-input__popover-day--selected" : ""}`}
                 onClick={() => pickDay(day)}
               >

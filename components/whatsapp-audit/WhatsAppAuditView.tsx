@@ -16,7 +16,7 @@ import {
   normalizeReplyTiming,
   type ReplyTiming,
 } from "@/lib/records/reply-timing";
-import { auditWeekday, formatAuditDate, type WhatsAppAudit } from "@/lib/whatsapp-audit/types";
+import { auditWeekday, effectiveReplyDate, formatAuditDate, type WhatsAppAudit } from "@/lib/whatsapp-audit/types";
 import { useAuthStore } from "@/store/auth-store";
 import { useEffectiveDashboardFilters } from "@/hooks/useEffectiveDashboardFilters";
 import { useWhatsAppAudits } from "@/hooks/useWhatsAppAudits";
@@ -24,7 +24,7 @@ import {
   CategoryPicker,
   Dash,
   FILTER_TRIGGER,
-  timeOrDash,
+  AuditTimeCell,
   type SaveState,
 } from "./audit-ui";
 
@@ -368,8 +368,12 @@ export default function WhatsAppAuditView() {
                     <td className="ct-wa-ellipsis ct-wa-strong" title={r.clientName || undefined}>
                       {r.clientName || <Dash />}
                     </td>
-                    <td className="ct-wa-num">{timeOrDash(r.clientMsgReceived)}</td>
-                    <td className="ct-wa-num">{timeOrDash(r.replyTime)}</td>
+                    <td className="ct-wa-num">
+                      <AuditTimeCell time={r.clientMsgReceived} date={r.clientMsgDate} entryDate={r.date} />
+                    </td>
+                    <td className="ct-wa-num">
+                      <AuditTimeCell time={r.replyTime} date={effectiveReplyDate(r)} entryDate={r.date} />
+                    </td>
                     <td className="ct-wa-cat-cell">
                       <CategoryPicker
                         value={r.category}

@@ -52,6 +52,42 @@ export function replyGapLabel(received: string, reply: string): string | null {
   return mins == null ? null : fmtMins(Math.round(mins));
 }
 
+/** Gap using explicit days when both are known; falls back to the clock-only rule. */
+export function replyGapLabelDated(
+  receivedDate: string,
+  received: string,
+  replyDate: string,
+  reply: string,
+): string | null {
+  const r = parseTime(received);
+  const p = parseTime(reply);
+  if (r == null || p == null) return null;
+  if (!receivedDate || !replyDate) return replyGapLabel(received, reply);
+  const day = (iso: string) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    return Date.UTC(y, m - 1, d) / 60000;
+  };
+  const mins = day(replyDate) + p - (day(receivedDate) + r);
+  return mins < 0 || !Number.isFinite(mins) ? null : fmtMins(Math.round(mins));
+}
+
+/** Time with a small date line when the day differs from the entry date. */
+export function AuditTimeCell({ time, date, entryDate }: { time: string; date: string; entryDate: string }) {
+  if (!String(time ?? "").trim()) return <Dash />;
+  const showDate = !!date && date !== entryDate;
+  let dateLabel = "";
+  if (showDate) {
+    const [y, m, d] = date.split("-").map(Number);
+    dateLabel = `${m}/${d}/${y}`;
+  }
+  return (
+    <span className="ct-wa-timecell">
+      <span>{formatStoredTimeDisplay(time)}</span>
+      {showDate ? <span className="ct-wa-timecell__date">{dateLabel}</span> : null}
+    </span>
+  );
+}
+
 export function Dash() {
   return <span className="ct-wa-muted">—</span>;
 }

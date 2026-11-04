@@ -30,6 +30,8 @@ import { makeDisplayName } from "@/lib/utils/display-name";
 import {
   AUDIT_LIMITS,
   auditWeekday,
+  effectiveReceivedDate,
+  effectiveReplyDate,
   emptyAuditInput,
   formatAuditDate,
   validateAuditInput,
@@ -40,16 +42,19 @@ import {
 } from "@/lib/whatsapp-audit/types";
 import { useAuthStore } from "@/store/auth-store";
 import { useWhatsAppAudits } from "@/hooks/useWhatsAppAudits";
-import { CATEGORY_TONE, CategoryPill, Dash, replyGapLabel, timeOrDash } from "./audit-ui";
+import { AuditTimeCell, CATEGORY_TONE, CategoryPill, Dash, replyGapLabelDated } from "./audit-ui";
 
-const RECENT_LIMIT = 25;
+const PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
+const DEFAULT_PAGE_SIZE = 10;
 const FIELD_ORDER: WhatsAppAuditField[] = [
   "date",
   "shift",
   "team",
   "profile",
   "clientName",
+  "clientMsgDate",
   "clientMsgReceived",
+  "replyDate",
   "replyTime",
   "category",
   "clientMessage",
@@ -64,6 +69,8 @@ const FIELD_ID: Record<WhatsAppAuditField, string> = {
   replyTime: "wal-reply",
   category: "wal-category",
   clientMessage: "wal-message",
+  clientMsgDate: "wal-received-date",
+  replyDate: "wal-reply-date",
 };
 
 type Banner = { kind: "success" | "error"; text: string } | null;
@@ -91,7 +98,15 @@ function auditToInput(a: WhatsAppAudit): WhatsAppAuditInput {
     replyTime: a.replyTime,
     category: a.category,
     clientMessage: a.clientMessage,
+    clientMsgDate: a.clientMsgDate || a.date,
+    replyDate: effectiveReplyDate(a),
   };
+}
+
+/** Sends the dates shown in the form (explicit or defaulted) so what you see is what is saved. */
+function withDates(f: WhatsAppAuditInput): WhatsAppAuditInput {
+  const clientMsgDate = effectiveReceivedDate(f);
+  return { ...f, clientMsgDate, replyDate: effectiveReplyDate({ ...f, clientMsgDate }) };
 }
 
 export default function LogWhatsAppAuditView() {
@@ -139,7 +154,7 @@ export default function LogWhatsAppAuditView() {
   );
 
   const errors = useMemo(() => {
-    const { errors: base } = validateAuditInput(form);
+    const { errors: base } = validateAuditInput(withDates(form), { maxDate: todayIso() });
     const out: WhatsAppAuditFieldErrors = { ...base };
     if (!out.team && teams.length && !teams.some((t) => t.toLowerCase() === form.team.trim().toLowerCase())) {
       out.team = "Select one of your teams.";
@@ -221,7 +236,7 @@ export default function LogWhatsAppAuditView() {
       document.getElementById(FIELD_ID[invalid[0]])?.focus();
       return;
     }
-    const { value } = validateAuditInput(form);
+    const { value } = validateAuditInput(withDates(form), { maxDate: todayIso() });
     setSaving(true);
     setBanner(null);
     try {
@@ -229,6 +244,7 @@ export default function LogWhatsAppAuditView() {
         ? await updateWhatsAppAudit(editing.id, value)
         : await createWhatsAppAudit(value);
       setHighlightId(saved.id);
+      if (!editing) setPage(0);
       window.setTimeout(() => setHighlightId((id) => (id === saved.id ? null : id)), 2600);
       resetForNext();
       flash({
@@ -251,14 +267,27 @@ export default function LogWhatsAppAuditView() {
     return [...seen].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).slice(0, 30);
   }, [audits]);
 
-  const recent = useMemo(() => audits.slice(0, RECENT_LIMIT), [audits]);
-  const today = todayIso();
-  const todayCount = useMemo(() => audits.filter((a) => a.date === today).length, [audits, today]);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
+  const total = audits.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  // Clamp at render so live deletes never strand you on an empty page.
+  const activePage = Math.min(page, totalPages - 1);
+  const recent = useMemo(
+    () => audits.slice(activePage * pageSize, (activePage + 1) * pageSize),
+    [audits, activePage, pageSize],
+  );
+  const rangeStart = total ? activePage * pageSize + 1 : 0;
+  const rangeEnd = activePage * pageSize + recent.length;
+  const todayIsoNow = todayIso();
+  const todayCount = useMemo(() => audits.filter((a) => a.date === todayIsoNow).length, [audits, todayIsoNow]);
 
   if (!user) return null;
 
   const day = auditWeekday(form.date);
-  const gap = replyGapLabel(form.clientMsgReceived, form.replyTime);
+  const dated = withDates(form);
+  const today = todayIso();
+  const gap = replyGapLabelDated(dated.clientMsgDate ?? "", form.clientMsgReceived, dated.replyDate ?? "", form.replyTime);
   const msgLen = form.clientMessage.length;
   const fieldClass = (f: WhatsAppAuditField) => `ct-wal-field${shown(f) ? " ct-wal-field--invalid" : ""}`;
   const ctl = (f: WhatsAppAuditField, extra: React.CSSProperties = {}) =>
@@ -504,6 +533,16 @@ export default function LogWhatsAppAuditView() {
                 <label className="ct-wal-label ct-wal-label--req" htmlFor={FIELD_ID.clientMsgReceived}>
                   Client Msg Received
                 </label>
+                <div className="ct-wal-timefield">
+                <CtDateInput
+                  key={`recv-date-${epoch}`}
+                  id={FIELD_ID.clientMsgDate}
+                  aria-label="Client message received date"
+                  value={dated.clientMsgDate ?? ""}
+                  max={today}
+                  onChange={(v) => setField("clientMsgDate", v)}
+                  inputStyleFn={(extra) => ctl("clientMsgDate", extra ?? {})}
+                />
                 <LogTimePicker
                   key={`recv-${epoch}`}
                   id={FIELD_ID.clientMsgReceived}
@@ -514,12 +553,26 @@ export default function LogWhatsAppAuditView() {
                   invalid={!!shown("clientMsgReceived")}
                   aria-describedby={describe("clientMsgReceived")}
                 />
-                <FieldError id={FIELD_ID.clientMsgReceived} text={shown("clientMsgReceived")} />
+                </div>
+                <FieldError
+                  id={FIELD_ID.clientMsgReceived}
+                  text={shown("clientMsgDate") ?? shown("clientMsgReceived")}
+                />
               </div>
               <div className={fieldClass("replyTime")}>
                 <label className="ct-wal-label" htmlFor={FIELD_ID.replyTime}>
                   Reply Time
                 </label>
+                <div className="ct-wal-timefield">
+                <CtDateInput
+                  key={`reply-date-${epoch}`}
+                  id={FIELD_ID.replyDate}
+                  aria-label="Reply date"
+                  value={dated.replyDate || form.replyDate || ""}
+                  max={today}
+                  onChange={(v) => setField("replyDate", v)}
+                  inputStyleFn={(extra) => ctl("replyDate", extra ?? {})}
+                />
                 <LogTimePicker
                   key={`reply-${epoch}`}
                   id={FIELD_ID.replyTime}
@@ -529,14 +582,15 @@ export default function LogWhatsAppAuditView() {
                   invalid={!!shown("replyTime")}
                   aria-describedby={describe("replyTime")}
                 />
-                <FieldError id={FIELD_ID.replyTime} text={shown("replyTime")} />
+                </div>
+                <FieldError id={FIELD_ID.replyTime} text={shown("replyDate") ?? shown("replyTime")} />
               </div>
               <div className="ct-wal-field">
                 <span className="ct-wal-label">Reply gap</span>
                 <div className={`ct-wal-readonly ct-wal-gap${gap ? " ct-wal-gap--on" : ""}`}>
                   {gap ?? <span className="ct-wa-muted">{form.replyTime ? "—" : "Awaiting reply time"}</span>}
                 </div>
-                <div className="ct-wal-field__msg ct-wal-field__msg--hint">Replies after midnight are counted</div>
+                <div className="ct-wal-field__msg ct-wal-field__msg--hint">Uses the dates you pick</div>
               </div>
             </div>
 
@@ -605,7 +659,7 @@ export default function LogWhatsAppAuditView() {
           <div className="ct-wa-head__title">
             <h3 className="ct-wa-title ct-wal-recent__title">My recent audits</h3>
             <p className="ct-wa-subtitle">
-              Your last {RECENT_LIMIT} entries. Category changes made by your leads show up here live.
+              All your entries, newest first. Category changes made by your leads show up here live.
             </p>
           </div>
           <span className="ct-wa-live">
@@ -682,8 +736,12 @@ export default function LogWhatsAppAuditView() {
                     <td className="ct-wa-ellipsis ct-wa-strong" title={a.clientName}>
                       {a.clientName}
                     </td>
-                    <td className="ct-wa-num">{timeOrDash(a.clientMsgReceived)}</td>
-                    <td className="ct-wa-num">{timeOrDash(a.replyTime)}</td>
+                    <td className="ct-wa-num">
+                      <AuditTimeCell time={a.clientMsgReceived} date={a.clientMsgDate} entryDate={a.date} />
+                    </td>
+                    <td className="ct-wa-num">
+                      <AuditTimeCell time={a.replyTime} date={effectiveReplyDate(a)} entryDate={a.date} />
+                    </td>
                     <td>
                       <CategoryPill value={a.category} />
                     </td>
@@ -707,15 +765,48 @@ export default function LogWhatsAppAuditView() {
           </table>
         </div>
         <footer className="ct-wa-foot">
-          <span>
+          <span className="ct-wa-foot__range">
             {status === "ready" ? (
               <>
-                Showing <strong>{recent.length}</strong> of <strong>{audits.length.toLocaleString()}</strong> entries
+                Showing <strong>{rangeStart.toLocaleString()}–{rangeEnd.toLocaleString()}</strong> of{" "}
+                <strong>{total.toLocaleString()}</strong> entries
               </>
             ) : (
               "Loading your audits…"
             )}
           </span>
+          <div className="ct-wa-pager" role="group" aria-label="Pagination">
+            <label className="ct-wa-pager__size">
+              Rows
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(0);
+                }}
+                aria-label="Rows per page"
+              >
+                {PAGE_SIZE_OPTIONS.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="button" disabled={activePage <= 0} onClick={() => setPage(Math.max(0, activePage - 1))}>
+              Previous
+            </button>
+            <span className="ct-wa-pager__label">
+              Page {activePage + 1} of {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={activePage >= totalPages - 1}
+              onClick={() => setPage(Math.min(totalPages - 1, activePage + 1))}
+            >
+              Next
+            </button>
+          </div>
         </footer>
       </section>
     </div>

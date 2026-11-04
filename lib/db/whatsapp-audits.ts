@@ -30,7 +30,38 @@ export function dbAuditRowToApp(row: Record<string, unknown> | null): WhatsAppAu
     replyTime: String(row.reply_time ?? ""),
     category: normalizeReplyTiming(row.category),
     clientMessage: String(row.client_message ?? ""),
+    clientMsgDate: row.client_msg_date ? String(row.client_msg_date).slice(0, 10) : "",
+    replyDate: row.reply_date ? String(row.reply_date).slice(0, 10) : "",
   };
+}
+
+/**
+ * The date columns come from a later migration. Until it is run (e.g. on cloud),
+ * writes retry without them so saving never breaks; dates are just not stored.
+ */
+const DATE_COLUMNS = ["client_msg_date", "reply_date"] as const;
+let dateColumnsMissingUntil = 0;
+
+function isMissingDateColumnError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  return DATE_COLUMNS.some((c) => msg.includes(c)) && /column|schema cache/i.test(msg);
+}
+
+async function withDateColumnFallback<T>(
+  payload: Record<string, unknown>,
+  run: (payload: Record<string, unknown>) => Promise<T>,
+): Promise<T> {
+  const stripped = { ...payload };
+  for (const c of DATE_COLUMNS) delete stripped[c];
+  if (Date.now() < dateColumnsMissingUntil) return run(stripped);
+  try {
+    return await run(payload);
+  } catch (err) {
+    if (!isMissingDateColumnError(err)) throw err;
+    dateColumnsMissingUntil = Date.now() + 60_000;
+    console.warn("whatsapp_audits: date columns missing; run supabase/cloud-scripts/whatsapp_audit_reply_dates.sql");
+    return run(stripped);
+  }
 }
 
 function inputToDb(input: WhatsAppAuditInput): Record<string, unknown> {
@@ -44,6 +75,8 @@ function inputToDb(input: WhatsAppAuditInput): Record<string, unknown> {
     reply_time: input.replyTime,
     category: input.category,
     client_message: input.clientMessage,
+    client_msg_date: input.clientMsgDate || null,
+    reply_date: (input.replyTime && input.replyDate) || null,
   };
 }
 
@@ -94,24 +127,25 @@ export async function insertWhatsAppAudit(
   input: WhatsAppAuditInput,
 ): Promise<WhatsAppAudit> {
   const now = new Date().toISOString();
-  return withSupabaseFailover(async (sb) => {
+  const payload = {
+    ...inputToDb(input),
+    created_by_user_id: String(viewer.id ?? ""),
+    analyst: analystName,
+    analyst_email: normEmail(viewer.email),
+    created_at: now,
+    updated_at: now,
+  };
+  return withDateColumnFallback(payload, (p) => withSupabaseFailover(async (sb) => {
     const res = await sb
       .from(TABLE)
-      .insert({
-        ...inputToDb(input),
-        created_by_user_id: String(viewer.id ?? ""),
-        analyst: analystName,
-        analyst_email: normEmail(viewer.email),
-        created_at: now,
-        updated_at: now,
-      })
+      .insert(p)
       .select("*")
       .single();
     const row = checkSupabaseResult(res, "insert whatsapp_audit");
     const audit = dbAuditRowToApp(row as Record<string, unknown>);
     if (!audit) throw new Error("insert whatsapp_audit: invalid row");
     return audit;
-  });
+  }));
 }
 
 export async function updateWhatsAppAudit(
@@ -119,16 +153,17 @@ export async function updateWhatsAppAudit(
   input: WhatsAppAuditInput,
   updatedBy: string,
 ): Promise<WhatsAppAudit | null> {
-  return withSupabaseFailover(async (sb) => {
+  const payload = { ...inputToDb(input), updated_by: updatedBy, updated_at: new Date().toISOString() };
+  return withDateColumnFallback(payload, (p) => withSupabaseFailover(async (sb) => {
     const res = await sb
       .from(TABLE)
-      .update({ ...inputToDb(input), updated_by: updatedBy, updated_at: new Date().toISOString() })
+      .update(p)
       .eq("id", id)
       .select("*")
       .maybeSingle();
     const row = checkSupabaseResult(res, "update whatsapp_audit");
     return dbAuditRowToApp(row as Record<string, unknown> | null);
-  });
+  }));
 }
 
 export async function setWhatsAppAuditCategory(
