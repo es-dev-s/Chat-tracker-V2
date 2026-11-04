@@ -19,6 +19,7 @@ export const CATEGORY_TONE: Record<ReplyTiming, Tone> = {
   after_12pm_next_day: { fg: "#b42318", bg: "#fdecea", border: "#f6c4c0" },
   main_cases: { fg: "#1f4fbf", bg: "#eaf1fe", border: "#c4d6fb" },
   sunday_only: { fg: "#5b3fb0", bg: "#f1ecfd", border: "#d8cdf6" },
+  left_as_seen: { fg: "#475467", bg: "#eef1f5", border: "#cfd5de" },
 };
 
 export const CATEGORY_OPTIONS = [

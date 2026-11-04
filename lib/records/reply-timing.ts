@@ -5,6 +5,7 @@ export const REPLY_TIMINGS = [
   "after_12pm_next_day",
   "main_cases",
   "sunday_only",
+  "left_as_seen",
 ] as const;
 
 export type ReplyTiming = (typeof REPLY_TIMINGS)[number];
@@ -15,6 +16,7 @@ export const REPLY_TIMING_LABELS: Record<ReplyTiming, string> = {
   after_12pm_next_day: "No reply until 12 PM the next day",
   main_cases: "Responses to main cases",
   sunday_only: "Replied only on Sunday",
+  left_as_seen: "Left as seen",
 };
 
 export function isReplyTiming(value: unknown): value is ReplyTiming {

@@ -43,6 +43,18 @@ export function mapWriteError(err: unknown): NextResponse {
     );
   }
 
+  // Cloud DB not yet widened for a newer category (e.g. "left_as_seen").
+  if (/23514|violates check constraint/i.test(code) && /reply_timing_check|category_check/i.test(code)) {
+    return NextResponse.json(
+      {
+        error: "DATABASE_SCHEMA_OUTDATED",
+        message:
+          "The database doesn't accept this category yet. Run supabase/cloud-scripts/reply_timing_left_as_seen.sql, then retry.",
+      },
+      { status: 503 },
+    );
+  }
+
   const missingReplyTimingColumn =
     /could not find|does not exist|schema cache|undefined_column|42703|PGRST204/i.test(code) &&
     code.toLowerCase().includes("reply_timing");

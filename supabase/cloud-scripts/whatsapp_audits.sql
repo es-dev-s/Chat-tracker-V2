@@ -29,7 +29,7 @@ create table if not exists public.whatsapp_audits (
   client_message text not null default '',
   constraint whatsapp_audits_category_check check (
     category is null
-    or category in ('same_day', 'next_morning', 'after_12pm_next_day', 'main_cases', 'sunday_only')
+    or category in ('same_day', 'next_morning', 'after_12pm_next_day', 'main_cases', 'sunday_only', 'left_as_seen')
   ),
   constraint whatsapp_audits_client_name_check check (char_length(btrim(client_name)) between 1 and 200),
   constraint whatsapp_audits_shift_check check (char_length(shift) <= 40),
