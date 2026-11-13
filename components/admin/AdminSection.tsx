@@ -172,6 +172,7 @@ export default function AdminSection(props: AdminSectionProps) {
   const [catalogTeamSearch, setCatalogTeamSearch] = useState("");
   const [confirmModal, setConfirmModal] = useState<ConfirmModal | null>(null);
   const [memberEditModal, setMemberEditModal] = useState<MemberEditModal | null>(null);
+  const [memberProfileSearch, setMemberProfileSearch] = useState("");
   const [memberEditBusy, setMemberEditBusy] = useState(false);
   const [createUserBusy, setCreateUserBusy] = useState(false);
   const [confirmBusy, setConfirmBusy] = useState(false);
@@ -216,6 +217,12 @@ export default function AdminSection(props: AdminSectionProps) {
     if (!q) return teams;
     return teams.filter((t) => String(t).toLowerCase().includes(q));
   }, [teams, catalogTeamSearch]);
+
+  const memberProfilesFiltered = useMemo(() => {
+    const q = memberProfileSearch.trim().toLowerCase();
+    if (!q) return profiles;
+    return profiles.filter((p) => String(p).toLowerCase().includes(q));
+  }, [profiles, memberProfileSearch]);
 
   const closeAddUserModal = useCallback(() => {
     setAddUserModalOpen(false);
@@ -273,6 +280,7 @@ export default function AdminSection(props: AdminSectionProps) {
 
   const openMemberEditModal = (kind: MemberEditModal["kind"], user: WorkspaceUser) => {
     if (!user) return;
+    setMemberProfileSearch("");
     if (kind === "email") {
       setEmailDrafts((prev) => ({ ...prev, [user.id]: user.email || "" }));
     } else if (kind === "password") {
@@ -617,6 +625,30 @@ export default function AdminSection(props: AdminSectionProps) {
 
                 {memberEditModal.kind === "profiles" && (
                   <div style={{ display: "grid", gap: 10 }}>
+                    <div className="ct-catalog-search-wrap">
+                      <Search
+                        size={16}
+                        strokeWidth={1.75}
+                        aria-hidden
+                        className="ct-catalog-search-wrap__icon"
+                      />
+                      <input
+                        className="ct-input ct-catalog-search-wrap__input"
+                        style={input()}
+                        type="search"
+                        placeholder="Search profiles…"
+                        value={memberProfileSearch}
+                        onChange={(e) => setMemberProfileSearch(e.target.value)}
+                        aria-label="Search profiles"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </div>
+                    {memberProfileSearch.trim() ? (
+                      <div style={{ color: C.muted, fontSize: 12 }}>
+                        Showing <strong>{memberProfilesFiltered.length}</strong> of {profiles.length}
+                      </div>
+                    ) : null}
                     <div
                       style={{
                         maxHeight: 240,
@@ -634,8 +666,12 @@ export default function AdminSection(props: AdminSectionProps) {
                         <span style={{ color: C.muted, fontSize: 12 }}>
                           Add profile names above before assigning.
                         </span>
+                      ) : memberProfilesFiltered.length === 0 ? (
+                        <span style={{ color: C.muted, fontSize: 12 }}>
+                          No profiles match your search.
+                        </span>
                       ) : (
-                        profiles.map((name) => {
+                        memberProfilesFiltered.map((name) => {
                           const picked = (memberProfilesDraft[activeMember.id] || []).includes(
                             name,
                           );
