@@ -274,6 +274,7 @@ export default function NotesTabsPanel({
   onDeleteMainLeadNote,
   deletingRecordId,
   showAcknowledge = false,
+  showDeviceAndReplyTiming = false,
 }: {
   analystRows: ChatRecord[];
   mainLeadRows: ChatRecord[];
@@ -292,6 +293,8 @@ export default function NotesTabsPanel({
   deletingRecordId?: number | null;
   /** All Leads only. Uses the same record acknowledgement as Records. */
   showAcknowledge?: boolean;
+  /** Shows the Device and Reply timing columns (hidden on All Leads and Notes). */
+  showDeviceAndReplyTiming?: boolean;
 }) {
   const [notesPanelView, setNotesPanelView] = useState<NotesPanelView>(
     lockView ?? "analyst",
@@ -350,7 +353,8 @@ export default function NotesTabsPanel({
 
   const showTabs = !lockView;
   const columnCount =
-    (activeView === "analyst" ? 8 : 9) +
+    (activeView === "analyst" ? 6 : 7) +
+    (showDeviceAndReplyTiming ? 2 : 0) +
     (activeView === "mainLead" && onDeleteMainLeadNote ? 1 : 0) +
     (showAcknowledge ? 1 : 0);
 
@@ -435,8 +439,12 @@ export default function NotesTabsPanel({
               <th>Team</th>
               <th>Profile</th>
               <th>{activeView === "analyst" ? "Client name" : "Client"}</th>
-              <th>Device</th>
-              <th>Reply timing</th>
+              {showDeviceAndReplyTiming ? (
+                <>
+                  <th>Device</th>
+                  <th>Reply timing</th>
+                </>
+              ) : null}
               <th>Analyst</th>
               <th>{activeView === "analyst" ? "Analyst Note" : "Main Lead Note"}</th>
               {activeView === "mainLead" ? <th>Follow-up</th> : null}
@@ -464,12 +472,16 @@ export default function NotesTabsPanel({
                     <ProfilePill profile={r.profile || ""} />
                   </td>
                   <td className="ct-notes-table__client">{r.clientName || "—"}</td>
-                  <td className="ct-notes-table__direction">
-                    <ChatDirectionBadge value={r.chatDirection} />
-                  </td>
-                  <td className="ct-notes-table__reply-timing">
-                    <ReplyTimingText value={r.replyTiming} />
-                  </td>
+                  {showDeviceAndReplyTiming ? (
+                    <>
+                      <td className="ct-notes-table__direction">
+                        <ChatDirectionBadge value={r.chatDirection} />
+                      </td>
+                      <td className="ct-notes-table__reply-timing">
+                        <ReplyTimingText value={r.replyTiming} />
+                      </td>
+                    </>
+                  ) : null}
                   <td className="ct-notes-table__analyst">
                     <AnalystAvatarCell analyst={r.analyst || ""} users={users} showName />
                   </td>
@@ -500,12 +512,16 @@ export default function NotesTabsPanel({
                     <ProfilePill profile={r.profile || ""} />
                   </td>
                   <td className="ct-notes-table__client">{displayClient(r)}</td>
-                  <td className="ct-notes-table__direction">
-                    <ChatDirectionBadge value={r.chatDirection} />
-                  </td>
-                  <td className="ct-notes-table__reply-timing">
-                    <ReplyTimingText value={r.replyTiming} />
-                  </td>
+                  {showDeviceAndReplyTiming ? (
+                    <>
+                      <td className="ct-notes-table__direction">
+                        <ChatDirectionBadge value={r.chatDirection} />
+                      </td>
+                      <td className="ct-notes-table__reply-timing">
+                        <ReplyTimingText value={r.replyTiming} />
+                      </td>
+                    </>
+                  ) : null}
                   <td className="ct-notes-table__analyst">
                     <AnalystAvatarCell analyst={r.analyst || ""} users={users} showName />
                   </td>

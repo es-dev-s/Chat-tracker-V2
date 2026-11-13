@@ -382,6 +382,7 @@ export default function LeadNotesView() {
         users={users}
         lockView="mainLead"
         panelTitle="Important Notes"
+        showDeviceAndReplyTiming
         mainLeadEmptyMessage="No main team lead notes added yet."
         currentUserEmail={user.email || ""}
         onDeleteMainLeadNote={(record) => {
