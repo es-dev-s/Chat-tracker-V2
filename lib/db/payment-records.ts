@@ -23,7 +23,6 @@ export function dbPaymentRowToApp(row: Record<string, unknown> | null): PaymentR
     totalAmount: Number(row.total_amount ?? 0),
     initialAmount: Number(row.initial_amount ?? 0),
     finalAmount: Number(row.final_amount ?? 0),
-    paymentCount: Number(row.payment_count ?? 0),
     team: String(row.team ?? ""),
     profile: String(row.profile ?? ""),
     analyst: String(row.analyst ?? ""),
@@ -39,7 +38,8 @@ function inputToDb(input: PaymentRecordInput): Record<string, unknown> {
     total_amount: input.totalAmount,
     initial_amount: input.initialAmount,
     final_amount: input.finalAmount,
-    payment_count: input.paymentCount,
+    // Column is NOT NULL with a 1..1000 check; the form no longer asks for a count.
+    payment_count: 1,
     team: input.team,
     profile: input.profile,
     analyst: input.analyst,

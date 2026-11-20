@@ -31,9 +31,9 @@ const FIELD_ID: Record<PaymentRecordField, string> = {
   toDate: "pay-to",
   clientName: "pay-client-name",
   clientNumber: "pay-client-number",
+  totalAmount: "pay-total",
   initialAmount: "pay-initial",
   finalAmount: "pay-final",
-  paymentCount: "pay-count",
   team: "pay-team",
   profile: "pay-profile",
   analyst: "pay-analyst",
@@ -201,7 +201,7 @@ export default function PaymentRecordFormDialog({
     });
   const describe = (f: PaymentRecordField) => `${FIELD_ID[f]}-msg`;
 
-  const money = (f: "initialAmount" | "finalAmount", label: string) => (
+  const money = (f: "totalAmount" | "initialAmount" | "finalAmount", label: string) => (
     <Field id={FIELD_ID[f]} label={`${label} (AUD)`} required error={shown(f)}>
       <div className="ct-pay-money">
         <span className="ct-pay-money__unit" aria-hidden>
@@ -340,6 +340,7 @@ export default function PaymentRecordFormDialog({
           </div>
 
           <div className="ct-pay-grid ct-pay-grid--3">
+            {money("totalAmount", "Total Payment Amount")}
             {money("initialAmount", "Initial Payment")}
             {money("finalAmount", "Final Payment")}
           </div>
@@ -376,25 +377,11 @@ export default function PaymentRecordFormDialog({
           </div>
 
           <div className="ct-pay-grid ct-pay-grid--2">
-            <Field id={FIELD_ID.paymentCount} label="Total Number of Payments" required error={shown("paymentCount")}>
-              <input
-                id={FIELD_ID.paymentCount}
-                style={ctl("paymentCount")}
-                inputMode="numeric"
-                autoComplete="off"
-                placeholder="e.g. 2"
-                value={form.paymentCount}
-                onChange={(e) => setField("paymentCount", e.target.value.replace(/\D/g, "").slice(0, 4))}
-                onBlur={() => touch("paymentCount")}
-                aria-invalid={!!shown("paymentCount")}
-                aria-describedby={describe("paymentCount")}
-              />
-            </Field>
             {pick("team", "Team Name", teamOptions)}
+            {pick("profile", "Profile Name", profileOptions)}
           </div>
 
           <div className="ct-pay-grid ct-pay-grid--2">
-            {pick("profile", "Profile Name", profileOptions)}
             {restricted ? (
               <Field
                 id={FIELD_ID.analyst}
@@ -488,8 +475,8 @@ export default function PaymentRecordFormDialog({
             </dd>
           </div>
           <div>
-            <dt>Payments</dt>
-            <dd>{value.paymentCount}</dd>
+            <dt>Total</dt>
+            <dd>{formatAud(value.totalAmount)}</dd>
           </div>
           <div>
             <dt>Team / Profile</dt>

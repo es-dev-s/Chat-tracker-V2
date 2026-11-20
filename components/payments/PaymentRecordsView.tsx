@@ -122,12 +122,10 @@ export default function PaymentRecordsView() {
 
   const stats = useMemo(() => {
     let cents = 0;
-    let payments = 0;
     for (const r of rows) {
       cents += Math.round(r.totalAmount * 100);
-      payments += r.paymentCount;
     }
-    return { records: rows.length, total: cents / 100, payments };
+    return { records: rows.length, total: cents / 100 };
   }, [rows]);
 
   // Ranking follows the date filter so "top receivers this month" works; team / search don't narrow it.
@@ -255,10 +253,6 @@ export default function PaymentRecordsView() {
             <span className="ct-wa-stat__label">Total payment amount</span>
             <span className="ct-wa-stat__value ct-pay-stat__money">{ready ? formatAud(stats.total) : "–"}</span>
           </div>
-          <div className="ct-wa-stat">
-            <span className="ct-wa-stat__label">Number of payments</span>
-            <span className="ct-wa-stat__value">{ready ? stats.payments.toLocaleString() : "–"}</span>
-          </div>
         </div>
 
         <div className="ct-pay-toolbar">
@@ -363,7 +357,7 @@ export default function PaymentRecordsView() {
                 <th>Client Number</th>
                 <th className="ct-wa-num">Initial (AUD)</th>
                 <th className="ct-wa-num">Final (AUD)</th>
-                <th className="ct-wa-num">Payments</th>
+                <th className="ct-wa-num">Total (AUD)</th>
                 {canManage ? <th aria-label="Actions" /> : null}
               </tr>
             </thead>
@@ -411,7 +405,7 @@ export default function PaymentRecordsView() {
                     </td>
                     <td className="ct-wa-num">{formatAmount(r.initialAmount)}</td>
                     <td className="ct-wa-num">{formatAmount(r.finalAmount)}</td>
-                    <td className="ct-wa-num">{r.paymentCount.toLocaleString()}</td>
+                    <td className="ct-wa-num ct-wa-strong">{formatAmount(r.totalAmount)}</td>
                     {canManage ? (
                       <td className="ct-wa-actions">
                         {canManagePayment(user, r) ? (
