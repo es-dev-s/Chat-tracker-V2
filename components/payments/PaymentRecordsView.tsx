@@ -116,7 +116,7 @@ export default function PaymentRecordsView() {
     return dateRows.filter((r) => {
       if (team !== ALL && r.team !== team) return false;
       if (!q) return true;
-      return [r.team, r.profile, r.analyst].some((v) => v.toLowerCase().includes(q));
+      return [r.team, r.profile, r.analyst, r.clientName, r.clientNumber].some((v) => v.toLowerCase().includes(q));
     });
   }, [dateRows, team, query]);
 
@@ -209,7 +209,7 @@ export default function PaymentRecordsView() {
   const pageRows = rows.slice(activePage * pageSize, (activePage + 1) * pageSize);
   const rangeStart = rows.length ? activePage * pageSize + 1 : 0;
   const rangeEnd = activePage * pageSize + pageRows.length;
-  const colCount = 8 + (canManage ? 1 : 0);
+  const colCount = 9 + (canManage ? 1 : 0);
   const notice = schemaMissing
     ? "Payment Records is not set up on the database yet. Run supabase/cloud-scripts/payment_records.sql, then reload."
     : status === "error"
@@ -268,7 +268,7 @@ export default function PaymentRecordsView() {
               type="search"
               value={query}
               onChange={(e) => resetView(() => setQuery(e.target.value))}
-              placeholder="Search team, profile or chat analyst"
+              placeholder="Search team, profile, analyst or client"
               aria-label="Search payment records"
             />
           </label>
@@ -345,6 +345,8 @@ export default function PaymentRecordsView() {
               <col style={{ width: 150 }} />
               <col style={{ width: 160 }} />
               <col style={{ width: 170 }} />
+              <col style={{ width: 170 }} />
+              <col style={{ width: 140 }} />
               <col style={{ width: 140 }} />
               <col style={{ width: 140 }} />
               <col style={{ width: 140 }} />
@@ -357,7 +359,8 @@ export default function PaymentRecordsView() {
                 <th>Team</th>
                 <th>Profile Name</th>
                 <th>Chat Analyst</th>
-                <th className="ct-wa-num">Total (AUD)</th>
+                <th>Client Name</th>
+                <th>Client Number</th>
                 <th className="ct-wa-num">Initial (AUD)</th>
                 <th className="ct-wa-num">Final (AUD)</th>
                 <th className="ct-wa-num">Payments</th>
@@ -400,7 +403,12 @@ export default function PaymentRecordsView() {
                     <td className="ct-wa-ellipsis ct-wa-strong" title={r.analyst || undefined}>
                       {r.analyst || <Dash />}
                     </td>
-                    <td className="ct-wa-num ct-wa-strong">{formatAmount(r.totalAmount)}</td>
+                    <td className="ct-wa-ellipsis" title={r.clientName || undefined}>
+                      {r.clientName || <Dash />}
+                    </td>
+                    <td className="ct-wa-ellipsis" title={r.clientNumber || undefined}>
+                      {r.clientNumber || <Dash />}
+                    </td>
                     <td className="ct-wa-num">{formatAmount(r.initialAmount)}</td>
                     <td className="ct-wa-num">{formatAmount(r.finalAmount)}</td>
                     <td className="ct-wa-num">{r.paymentCount.toLocaleString()}</td>

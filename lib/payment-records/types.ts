@@ -23,12 +23,16 @@ export type PaymentRecord = {
   profile: string;
   /** Chat Analyst Name: the payment receiver used for the Top Payment Receiver ranking. */
   analyst: string;
+  clientName: string;
+  /** Optional; empty string when not given. */
+  clientNumber: string;
 };
 
 /** Validated payload sent to the API and written to the database. */
 export type PaymentRecordInput = {
   fromDate: string;
   toDate: string;
+  /** Derived: initial + final. Not entered in the form. */
   totalAmount: number;
   initialAmount: number;
   finalAmount: number;
@@ -36,28 +40,33 @@ export type PaymentRecordInput = {
   team: string;
   profile: string;
   analyst: string;
+  clientName: string;
+  clientNumber: string;
 };
 
 /** What the form holds while typing (amounts and count stay as text). */
 export type PaymentRecordDraft = {
   fromDate: string;
   toDate: string;
-  totalAmount: string;
   initialAmount: string;
   finalAmount: string;
   paymentCount: string;
   team: string;
   profile: string;
   analyst: string;
+  clientName: string;
+  clientNumber: string;
 };
 
-export type PaymentRecordField = keyof PaymentRecordInput;
+/** Form fields (totalAmount is derived, so it has no input). */
+export type PaymentRecordField = Exclude<keyof PaymentRecordInput, "totalAmount">;
 export type PaymentRecordFieldErrors = Partial<Record<PaymentRecordField, string>>;
 
 export const PAYMENT_FIELDS: readonly PaymentRecordField[] = [
   "fromDate",
   "toDate",
-  "totalAmount",
+  "clientName",
+  "clientNumber",
   "initialAmount",
   "finalAmount",
   "paymentCount",
@@ -77,7 +86,8 @@ export function emptyPaymentDraft(): PaymentRecordDraft {
   return {
     fromDate: "",
     toDate: "",
-    totalAmount: "",
+    clientName: "",
+    clientNumber: "",
     initialAmount: "",
     finalAmount: "",
     paymentCount: "",
@@ -91,7 +101,8 @@ export function paymentToDraft(r: PaymentRecord): PaymentRecordDraft {
   return {
     fromDate: r.fromDate,
     toDate: r.toDate,
-    totalAmount: amountToText(r.totalAmount),
+    clientName: r.clientName,
+    clientNumber: r.clientNumber,
     initialAmount: amountToText(r.initialAmount),
     finalAmount: amountToText(r.finalAmount),
     paymentCount: String(r.paymentCount),
@@ -150,21 +161,29 @@ export function validatePaymentInput(raw: unknown): {
   else if (!isValidIsoDateString(toDate)) errors.toDate = "Enter a valid date.";
   else if (!errors.fromDate && toDate < fromDate) errors.toDate = "To Date can't be before From Date.";
 
-  const amount = (key: "totalAmount" | "initialAmount" | "finalAmount", label: string): number => {
+  const amount = (key: "initialAmount" | "finalAmount", label: string): number => {
     const blank = text(src[key]) === "";
     const cents = parseAmountCents(src[key]);
     if (blank) errors[key] = `${label} is required.`;
     else if (cents == null) errors[key] = "Enter an amount like 1250 or 1250.50.";
     else if (cents > MAX_CENTS) errors[key] = "Amount is too large.";
-    else if (key === "totalAmount" && cents === 0) errors[key] = "Total Payment Amount must be more than 0.";
     return cents ?? 0;
   };
-  const totalCents = amount("totalAmount", "Total Payment Amount");
   const initialCents = amount("initialAmount", "Initial Payment");
   const finalCents = amount("finalAmount", "Final Payment");
-  if (!errors.totalAmount && !errors.initialAmount && !errors.finalAmount && initialCents + finalCents > totalCents) {
-    errors.finalAmount = "Initial + Final Payment can't be more than the Total Payment Amount.";
+  const totalCents = initialCents + finalCents;
+  if (!errors.initialAmount && !errors.finalAmount && totalCents === 0) {
+    errors.initialAmount = "Initial or Final Payment must be more than 0.";
   }
+  if (totalCents > MAX_CENTS && !errors.initialAmount && !errors.finalAmount) {
+    errors.finalAmount = "Initial + Final Payment is too large.";
+  }
+
+  const clientName = text(src.clientName);
+  if (!clientName) errors.clientName = "Client Name is required.";
+  else if (clientName.length > PAYMENT_LIMITS.name) errors.clientName = "Client Name is too long.";
+  const clientNumber = text(src.clientNumber);
+  if (clientNumber.length > PAYMENT_LIMITS.name) errors.clientNumber = "Client Number is too long.";
 
   let paymentCount = 0;
   if (text(src.paymentCount) === "") errors.paymentCount = "Total Number of Payments is required.";
@@ -197,6 +216,8 @@ export function validatePaymentInput(raw: unknown): {
       team,
       profile,
       analyst,
+      clientName,
+      clientNumber,
     },
     errors,
   };

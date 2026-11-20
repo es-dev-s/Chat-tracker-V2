@@ -27,6 +27,8 @@ export function dbPaymentRowToApp(row: Record<string, unknown> | null): PaymentR
     team: String(row.team ?? ""),
     profile: String(row.profile ?? ""),
     analyst: String(row.analyst ?? ""),
+    clientName: String(row.client_name ?? ""),
+    clientNumber: String(row.client_number ?? ""),
   };
 }
 
@@ -41,6 +43,8 @@ function inputToDb(input: PaymentRecordInput): Record<string, unknown> {
     team: input.team,
     profile: input.profile,
     analyst: input.analyst,
+    client_name: input.clientName,
+    client_number: input.clientNumber,
   };
 }
 

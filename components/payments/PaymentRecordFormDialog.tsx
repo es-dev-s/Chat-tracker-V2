@@ -29,7 +29,8 @@ export const ANALYST_CONFIRM_MESSAGE =
 const FIELD_ID: Record<PaymentRecordField, string> = {
   fromDate: "pay-from",
   toDate: "pay-to",
-  totalAmount: "pay-total",
+  clientName: "pay-client-name",
+  clientNumber: "pay-client-number",
   initialAmount: "pay-initial",
   finalAmount: "pay-final",
   paymentCount: "pay-count",
@@ -200,7 +201,7 @@ export default function PaymentRecordFormDialog({
     });
   const describe = (f: PaymentRecordField) => `${FIELD_ID[f]}-msg`;
 
-  const money = (f: "totalAmount" | "initialAmount" | "finalAmount", label: string) => (
+  const money = (f: "initialAmount" | "finalAmount", label: string) => (
     <Field id={FIELD_ID[f]} label={`${label} (AUD)`} required error={shown(f)}>
       <div className="ct-pay-money">
         <span className="ct-pay-money__unit" aria-hidden>
@@ -339,9 +340,39 @@ export default function PaymentRecordFormDialog({
           </div>
 
           <div className="ct-pay-grid ct-pay-grid--3">
-            {money("totalAmount", "Total Payment Amount")}
             {money("initialAmount", "Initial Payment")}
             {money("finalAmount", "Final Payment")}
+          </div>
+
+          <div className="ct-pay-grid ct-pay-grid--2">
+            <Field id={FIELD_ID.clientName} label="Client Name" required error={shown("clientName")}>
+              <input
+                id={FIELD_ID.clientName}
+                style={ctl("clientName")}
+                autoComplete="off"
+                maxLength={PAYMENT_LIMITS.name}
+                value={form.clientName}
+                onChange={(e) => setField("clientName", e.target.value)}
+                onBlur={() => touch("clientName")}
+                placeholder="Client Name"
+                aria-invalid={!!shown("clientName")}
+                aria-describedby={describe("clientName")}
+              />
+            </Field>
+            <Field id={FIELD_ID.clientNumber} label="Client Number" error={shown("clientNumber")} hint="Optional">
+              <input
+                id={FIELD_ID.clientNumber}
+                style={ctl("clientNumber")}
+                autoComplete="off"
+                maxLength={PAYMENT_LIMITS.name}
+                value={form.clientNumber}
+                onChange={(e) => setField("clientNumber", e.target.value)}
+                onBlur={() => touch("clientNumber")}
+                placeholder="Client Number"
+                aria-invalid={!!shown("clientNumber")}
+                aria-describedby={describe("clientNumber")}
+              />
+            </Field>
           </div>
 
           <div className="ct-pay-grid ct-pay-grid--2">
@@ -444,8 +475,11 @@ export default function PaymentRecordFormDialog({
             </dd>
           </div>
           <div>
-            <dt>Total</dt>
-            <dd>{formatAud(value.totalAmount)}</dd>
+            <dt>Client</dt>
+            <dd>
+              {value.clientName}
+              {value.clientNumber ? ` (${value.clientNumber})` : ""}
+            </dd>
           </div>
           <div>
             <dt>Initial / Final</dt>
