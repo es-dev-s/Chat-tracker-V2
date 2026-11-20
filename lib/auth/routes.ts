@@ -11,6 +11,7 @@ export const ROUTES = {
   leadNotes: "/lead-notes",
   whatsappAudit: "/whatsapp-audit",
   logWhatsappAudit: "/log-whatsapp-audit",
+  paymentRecords: "/payment-records",
 } as const;
 
 export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES];
@@ -24,7 +25,8 @@ export type TabId =
   | "leads"
   | "leadNotes"
   | "whatsappAudit"
-  | "logWhatsappAudit";
+  | "logWhatsappAudit"
+  | "paymentRecords";
 
 export const TAB_TO_PATH: Record<TabId, AppRoute> = {
   dashboard: ROUTES.dashboard,
@@ -36,6 +38,7 @@ export const TAB_TO_PATH: Record<TabId, AppRoute> = {
   leadNotes: ROUTES.leadNotes,
   whatsappAudit: ROUTES.whatsappAudit,
   logWhatsappAudit: ROUTES.logWhatsappAudit,
+  paymentRecords: ROUTES.paymentRecords,
 };
 
 export const PATH_TO_TAB: Record<string, TabId> = Object.fromEntries(
@@ -46,17 +49,19 @@ export const PATH_TO_TAB: Record<string, TabId> = Object.fromEntries(
  * `isAdmin` marks a super admin (unrestricted team lead).
  * WhatsApp Audit: analysts log entries on `logWhatsappAudit`; main team leads and
  * super admins review them on `whatsappAudit`.
+ * Payment Records: every role has the page; what each can do on it is decided by
+ * lib/payment-records/access.ts.
  */
 export function tabsForRole(role: UserRole | string, isAdmin = false): TabId[] {
   if (role === "teamLead") {
     return isAdmin
-      ? ["dashboard", "records", "notes", "admin", "whatsappAudit"]
-      : ["dashboard", "records", "notes", "admin"];
+      ? ["dashboard", "records", "notes", "admin", "whatsappAudit", "paymentRecords"]
+      : ["dashboard", "records", "notes", "admin", "paymentRecords"];
   }
   if (role === "mainTeamLead") {
-    return ["dashboard", "records", "leads", "leadNotes", "whatsappAudit"];
+    return ["dashboard", "records", "leads", "leadNotes", "whatsappAudit", "paymentRecords"];
   }
-  return ["dashboard", "log", "logWhatsappAudit", "records", "notes"];
+  return ["dashboard", "log", "logWhatsappAudit", "records", "notes", "paymentRecords"];
 }
 
 export function routeAllowedForRole(
