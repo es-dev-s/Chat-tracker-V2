@@ -13,6 +13,11 @@ import {
 } from "@/lib/realtime/reply-timing-channel";
 import { normalizeReplyTiming } from "@/lib/records/reply-timing";
 import {
+  PAYMENT_RECORD_REALTIME_EVENT,
+  PAYMENT_RECORD_REALTIME_TOPIC,
+  type PaymentRecordRealtimeEvent,
+} from "@/lib/realtime/payment-record-channel";
+import {
   WHATSAPP_AUDIT_REALTIME_EVENT,
   WHATSAPP_AUDIT_REALTIME_TOPIC,
   type WhatsAppAuditRealtimeEvent,
@@ -22,6 +27,7 @@ import {
   requestAuditRefresh,
   useWhatsAppAuditStore,
 } from "@/store/whatsapp-audit-store";
+import { requestPaymentRefresh, usePaymentRecordStore } from "@/store/payment-record-store";
 import { useWorkspaceStore } from "@/store/workspace-store";
 
 type RealtimeNode = {
@@ -89,6 +95,17 @@ function applyAuditChange(payload: Partial<WhatsAppAuditRealtimeEvent> | undefin
   // The payload carries no row data; refetch through the role-scoped API.
   // A pick still saving on this screen is protected by the pending overlay.
   requestAuditRefresh(hasPendingAuditCategory(id) ? 600 : 150);
+}
+
+function applyPaymentChange(payload: Partial<PaymentRecordRealtimeEvent> | undefined) {
+  const id = Number(payload?.id);
+  if (!Number.isFinite(id) || id <= 0) return;
+  if (payload?.op === "deleted") {
+    usePaymentRecordStore.getState().remove(id);
+    return;
+  }
+  // The payload carries no row data; refetch through the role-scoped API.
+  requestPaymentRefresh(150);
 }
 
 /**
@@ -161,7 +178,14 @@ export default function SupabaseRealtimeBridge({
         })
         .subscribe(onChannelStatus);
 
-      channelsRef.current = [ackChannel, replyChannel, auditChannel];
+      const paymentChannel = client
+        .channel(PAYMENT_RECORD_REALTIME_TOPIC)
+        .on("broadcast", { event: PAYMENT_RECORD_REALTIME_EVENT }, ({ payload }) => {
+          applyPaymentChange(payload as Partial<PaymentRecordRealtimeEvent>);
+        })
+        .subscribe(onChannelStatus);
+
+      channelsRef.current = [ackChannel, replyChannel, auditChannel, paymentChannel];
     };
 
     subscribe(0);

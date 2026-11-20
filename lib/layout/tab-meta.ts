@@ -2,6 +2,7 @@ import {
   BookMarked,
   ClipboardCheck,
   ClipboardPen,
+  Wallet,
   LayoutDashboard,
   MessageSquarePlus,
   NotebookPen,
@@ -53,6 +54,10 @@ export const TAB_META: Record<TabId, TabMeta> = {
   logWhatsappAudit: {
     label: "Log WhatsApp Audit",
     Icon: ClipboardPen,
+  },
+  paymentRecords: {
+    label: "Payment Records",
+    Icon: Wallet,
   },
 };
 
