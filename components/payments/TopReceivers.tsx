@@ -3,7 +3,7 @@ import { formatAud, type TopReceiver } from "@/lib/payment-records/types";
 
 const RANKS = ["Top 1", "Top 2", "Top 3"] as const;
 
-/** Top 1 / 2 / 3 payment receivers (by total payment amount). Team Lead only. */
+/** Top 1 / 2 / 3 payment receivers (by total payment amount). Chat Analyst Team Lead only. */
 export default function TopReceivers({
   receivers,
   periodLabel,

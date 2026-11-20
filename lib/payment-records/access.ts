@@ -12,11 +12,11 @@ import {
  *
  * - analyst (Chat Analyst): adds records for themselves and sees only their own.
  *   Can never edit or delete, even their own.
- * - mainTeamLead (Team Lead): adds, views all, edits and deletes. Sees the Top
- *   Payment Receiver panel.
+ * - mainTeamLead (Team Lead): adds, views all, edits and deletes.
  * - teamLead (Chat Analyst Team Lead): read-only. Sees records added by chat
  *   analysts, limited to their own teams (a super admin sees all teams).
  *   Cannot add, edit or delete.
+ *   Sees the Top Payment Receiver panel.
  */
 type Viewer = Partial<AppUser>;
 type Row = { team?: string; createdByUserId?: string; createdByRole?: string };
@@ -54,9 +54,9 @@ export function canManagePayment(viewer: Viewer, row: Row): boolean {
   return viewer?.role === "mainTeamLead" && paymentVisibleToViewer(viewer, row);
 }
 
-/** Top Payment Receiver panel: Team Lead (mainTeamLead) only. */
+/** Top Payment Receiver panel: Chat Analyst Team Lead (teamLead) only. */
 export function canSeeTopReceivers(viewer: Viewer): boolean {
-  return viewer?.role === "mainTeamLead";
+  return viewer?.role === "teamLead";
 }
 
 /**
