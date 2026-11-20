@@ -1627,7 +1627,7 @@ input:focus-visible {
 
 .ct-date-input__popover {
   position: fixed;
-  z-index: 10050;
+  z-index: 13000; /* above admin/payment modal backdrops (up to 12000) */
   box-sizing: border-box;
   padding: 12px;
   border-radius: var(--ct-radius-md);

@@ -196,7 +196,7 @@ export default function PaymentRecordFormDialog({
   const ctl = (f: PaymentRecordField, extra: React.CSSProperties = {}) =>
     inputStyle({
       minHeight: 42,
-      ...(shown(f) ? { borderColor: "#f04438", boxShadow: "0 0 0 3px rgba(240, 68, 56, 0.12)" } : {}),
+      ...(shown(f) ? { border: "1px solid #f04438", boxShadow: "0 0 0 3px rgba(240, 68, 56, 0.12)" } : {}),
       ...extra,
     });
   const describe = (f: PaymentRecordField) => `${FIELD_ID[f]}-msg`;

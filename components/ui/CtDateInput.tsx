@@ -333,14 +333,27 @@ export default function CtDateInput({
           style={{ ...baseInput, flex: 1, minWidth: compact ? 0 : 120, width: "100%" }}
           value={draft}
           placeholder="YYYY-MM-DD"
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            const next = e.target.value;
+            setDraft(next);
+            const t = next.trim();
+            if (isValidIsoDateString(t) && !(max && t > max) && t !== value) {
+              onChange(t);
+              const p = parseIsoDateParts(t);
+              if (p) setCursorMonth(new Date(p.y, p.m, 1));
+            }
+          }}
           onBlur={commitDraft}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
+              e.stopPropagation();
               commitDraft();
             }
-            if (e.key === "Escape") setOpen(false);
+            if (e.key === "Escape") {
+              if (open) e.stopPropagation();
+              setOpen(false);
+            }
           }}
         />
         <button
