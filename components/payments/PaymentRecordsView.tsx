@@ -24,7 +24,8 @@ import {
   formatAud,
   formatPaymentDate,
   paymentToDraft,
-  periodOverlaps,
+  PAYMENT_TYPE_LABEL,
+  paymentDateInRange,
   topPaymentReceivers,
   type PaymentRecord,
   type PaymentRecordInput,
@@ -100,9 +101,9 @@ export default function PaymentRecordsView() {
     timers.current.push(window.setTimeout(fn, ms));
   };
 
-  /** Date filter: records whose payment period overlaps the chosen range. */
+  /** Date filter: records whose payment date falls in the chosen range. */
   const dateRows = useMemo(
-    () => records.filter((r) => periodOverlaps(r, from, to)),
+    () => records.filter((r) => paymentDateInRange(r, from, to)),
     [records, from, to],
   );
 
@@ -123,7 +124,7 @@ export default function PaymentRecordsView() {
   const stats = useMemo(() => {
     let cents = 0;
     for (const r of rows) {
-      cents += Math.round(r.totalAmount * 100);
+      cents += Math.round(r.amount * 100);
     }
     return { records: rows.length, total: cents / 100 };
   }, [rows]);
@@ -207,7 +208,7 @@ export default function PaymentRecordsView() {
   const pageRows = rows.slice(activePage * pageSize, (activePage + 1) * pageSize);
   const rangeStart = rows.length ? activePage * pageSize + 1 : 0;
   const rangeEnd = activePage * pageSize + pageRows.length;
-  const colCount = 9 + (canManage ? 1 : 0);
+  const colCount = 8 + (canManage ? 1 : 0);
   const notice = schemaMissing
     ? "Payment Records is not set up on the database yet. Run supabase/cloud-scripts/payment_records.sql, then reload."
     : status === "error"
@@ -279,7 +280,7 @@ export default function PaymentRecordsView() {
             <CtDateInput
               key={`from-${dateEpoch}`}
               compact
-              aria-label="Period from"
+              aria-label="Payment date from"
               value={from}
               max={to || undefined}
               inputStyleFn={inputStyle}
@@ -291,7 +292,7 @@ export default function PaymentRecordsView() {
             <CtDateInput
               key={`to-${dateEpoch}`}
               compact
-              aria-label="Period to"
+              aria-label="Payment date to"
               value={to}
               inputStyleFn={inputStyle}
               onChange={(v) => resetView(() => setTo(v))}
@@ -342,22 +343,20 @@ export default function PaymentRecordsView() {
               <col style={{ width: 170 }} />
               <col style={{ width: 140 }} />
               <col style={{ width: 140 }} />
+              <col style={{ width: 170 }} />
               <col style={{ width: 140 }} />
-              <col style={{ width: 140 }} />
-              <col style={{ width: 110 }} />
               {canManage ? <col style={{ width: 92 }} /> : null}
             </colgroup>
             <thead>
               <tr>
-                <th>Period</th>
+                <th>Payment Date</th>
                 <th>Team</th>
                 <th>Profile Name</th>
                 <th>Chat Analyst</th>
                 <th>Client Name</th>
                 <th>Client Number</th>
-                <th className="ct-wa-num">Initial (AUD)</th>
-                <th className="ct-wa-num">Final (AUD)</th>
-                <th className="ct-wa-num">Total (AUD)</th>
+                <th>Payment Type</th>
+                <th className="ct-wa-num">Amount (AUD)</th>
                 {canManage ? <th aria-label="Actions" /> : null}
               </tr>
             </thead>
@@ -385,9 +384,7 @@ export default function PaymentRecordsView() {
               ) : (
                 pageRows.map((r) => (
                   <tr key={r.id} className={r.id === highlightId ? "ct-wal-row--new" : undefined}>
-                    <td className="ct-wa-nowrap">
-                      {formatPaymentDate(r.fromDate)} – {formatPaymentDate(r.toDate)}
-                    </td>
+                    <td className="ct-wa-nowrap">{formatPaymentDate(r.paymentDate)}</td>
                     <td className="ct-wa-ellipsis" title={r.team || undefined}>
                       {r.team || <Dash />}
                     </td>
@@ -403,9 +400,8 @@ export default function PaymentRecordsView() {
                     <td className="ct-wa-ellipsis" title={r.clientNumber || undefined}>
                       {r.clientNumber || <Dash />}
                     </td>
-                    <td className="ct-wa-num">{formatAmount(r.initialAmount)}</td>
-                    <td className="ct-wa-num">{formatAmount(r.finalAmount)}</td>
-                    <td className="ct-wa-num ct-wa-strong">{formatAmount(r.totalAmount)}</td>
+                    <td className="ct-wa-nowrap">{PAYMENT_TYPE_LABEL[r.paymentType]}</td>
+                    <td className="ct-wa-num ct-wa-strong">{formatAmount(r.amount)}</td>
                     {canManage ? (
                       <td className="ct-wa-actions">
                         {canManagePayment(user, r) ? (
@@ -523,8 +519,8 @@ export default function PaymentRecordsView() {
       >
         {confirmDelete ? (
           <>
-            The {formatAud(confirmDelete.totalAmount)} record for <strong>{confirmDelete.analyst}</strong> (
-            {formatPaymentDate(confirmDelete.fromDate)} – {formatPaymentDate(confirmDelete.toDate)}) will be removed
+            The {formatAud(confirmDelete.amount)} record for <strong>{confirmDelete.analyst}</strong> (
+            {formatPaymentDate(confirmDelete.paymentDate)}) will be removed
             for everyone. This can&apos;t be undone.
           </>
         ) : null}

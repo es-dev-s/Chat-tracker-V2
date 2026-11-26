@@ -1,5 +1,17 @@
 import { isValidIsoDateString } from "@/lib/utils/date-iso";
 
+export const PAYMENT_TYPES = ["initial", "final"] as const;
+export type PaymentType = (typeof PAYMENT_TYPES)[number];
+
+export const PAYMENT_TYPE_LABEL: Record<PaymentType, string> = {
+  initial: "Initial Payment (AUD)",
+  final: "Final Payment (AUD)",
+};
+
+export function isPaymentType(v: unknown): v is PaymentType {
+  return v === "initial" || v === "final";
+}
+
 /**
  * Payment Record. Its own dataset (`public.payment_records`), separate from chat
  * records. All amounts are AUD.
@@ -11,13 +23,11 @@ export type PaymentRecord = {
   createdByUserId: string;
   /** Role of whoever added it: "analyst" or "mainTeamLead". Drives who can see it. */
   createdByRole: string;
-  /** ISO YYYY-MM-DD, start of the payment period. */
-  fromDate: string;
-  /** ISO YYYY-MM-DD, end of the payment period. */
-  toDate: string;
-  totalAmount: number;
-  initialAmount: number;
-  finalAmount: number;
+  /** ISO YYYY-MM-DD, the day the payment was made. */
+  paymentDate: string;
+  paymentType: PaymentType;
+  /** AUD amount of this payment. */
+  amount: number;
   team: string;
   profile: string;
   /** Chat Analyst Name: the payment receiver used for the Top Payment Receiver ranking. */
@@ -29,11 +39,9 @@ export type PaymentRecord = {
 
 /** Validated payload sent to the API and written to the database. */
 export type PaymentRecordInput = {
-  fromDate: string;
-  toDate: string;
-  totalAmount: number;
-  initialAmount: number;
-  finalAmount: number;
+  paymentDate: string;
+  paymentType: PaymentType;
+  amount: number;
   team: string;
   profile: string;
   analyst: string;
@@ -43,11 +51,10 @@ export type PaymentRecordInput = {
 
 /** What the form holds while typing (amounts and count stay as text). */
 export type PaymentRecordDraft = {
-  fromDate: string;
-  toDate: string;
-  totalAmount: string;
-  initialAmount: string;
-  finalAmount: string;
+  paymentDate: string;
+  /** "" until the user picks one. */
+  paymentType: PaymentType | "";
+  amount: string;
   team: string;
   profile: string;
   analyst: string;
@@ -59,13 +66,11 @@ export type PaymentRecordField = keyof PaymentRecordInput;
 export type PaymentRecordFieldErrors = Partial<Record<PaymentRecordField, string>>;
 
 export const PAYMENT_FIELDS: readonly PaymentRecordField[] = [
-  "fromDate",
-  "toDate",
+  "paymentDate",
+  "paymentType",
+  "amount",
   "clientName",
   "clientNumber",
-  "totalAmount",
-  "initialAmount",
-  "finalAmount",
   "team",
   "profile",
   "analyst",
@@ -80,13 +85,11 @@ export const PAYMENT_LIMITS = {
 
 export function emptyPaymentDraft(): PaymentRecordDraft {
   return {
-    fromDate: "",
-    toDate: "",
+    paymentDate: "",
+    paymentType: "",
+    amount: "",
     clientName: "",
     clientNumber: "",
-    totalAmount: "",
-    initialAmount: "",
-    finalAmount: "",
     team: "",
     profile: "",
     analyst: "",
@@ -95,13 +98,11 @@ export function emptyPaymentDraft(): PaymentRecordDraft {
 
 export function paymentToDraft(r: PaymentRecord): PaymentRecordDraft {
   return {
-    fromDate: r.fromDate,
-    toDate: r.toDate,
+    paymentDate: r.paymentDate,
+    paymentType: r.paymentType,
+    amount: amountToText(r.amount),
     clientName: r.clientName,
     clientNumber: r.clientNumber,
-    totalAmount: amountToText(r.totalAmount),
-    initialAmount: amountToText(r.initialAmount),
-    finalAmount: amountToText(r.finalAmount),
     team: r.team,
     profile: r.profile,
     analyst: r.analyst,
@@ -148,30 +149,20 @@ export function validatePaymentInput(raw: unknown): {
   const src = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const errors: PaymentRecordFieldErrors = {};
 
-  const fromDate = text(src.fromDate);
-  if (!fromDate) errors.fromDate = "From Date is required.";
-  else if (!isValidIsoDateString(fromDate)) errors.fromDate = "Enter a valid date.";
+  const paymentDate = text(src.paymentDate);
+  if (!paymentDate) errors.paymentDate = "Payment Date is required.";
+  else if (!isValidIsoDateString(paymentDate)) errors.paymentDate = "Enter a valid date.";
 
-  const toDate = text(src.toDate);
-  if (!toDate) errors.toDate = "To Date is required.";
-  else if (!isValidIsoDateString(toDate)) errors.toDate = "Enter a valid date.";
-  else if (!errors.fromDate && toDate < fromDate) errors.toDate = "To Date can't be before From Date.";
+  const typeRaw = text(src.paymentType);
+  const paymentType: PaymentType = isPaymentType(typeRaw) ? typeRaw : "initial";
+  if (!typeRaw) errors.paymentType = "Payment Type is required.";
+  else if (!isPaymentType(typeRaw)) errors.paymentType = "Choose a valid Payment Type.";
 
-  const amount = (key: "totalAmount" | "initialAmount" | "finalAmount", label: string): number => {
-    const blank = text(src[key]) === "";
-    const cents = parseAmountCents(src[key]);
-    if (blank) errors[key] = `${label} is required.`;
-    else if (cents == null) errors[key] = "Enter an amount like 1250 or 1250.50.";
-    else if (cents > MAX_CENTS) errors[key] = "Amount is too large.";
-    else if (key === "totalAmount" && cents === 0) errors[key] = "Total Payment Amount must be more than 0.";
-    return cents ?? 0;
-  };
-  const totalCents = amount("totalAmount", "Total Payment Amount");
-  const initialCents = amount("initialAmount", "Initial Payment");
-  const finalCents = amount("finalAmount", "Final Payment");
-  if (!errors.totalAmount && !errors.initialAmount && !errors.finalAmount && initialCents + finalCents > totalCents) {
-    errors.finalAmount = "Initial + Final Payment can't be more than the Total Payment Amount.";
-  }
+  const cents = parseAmountCents(src.amount);
+  if (text(src.amount) === "") errors.amount = "Payment Amount is required.";
+  else if (cents == null) errors.amount = "Enter an amount like 1250 or 1250.50.";
+  else if (cents > MAX_CENTS) errors.amount = "Amount is too large.";
+  else if (cents === 0) errors.amount = "Payment Amount must be more than 0.";
 
   const clientName = text(src.clientName);
   if (!clientName) errors.clientName = "Client Name is required.";
@@ -191,11 +182,9 @@ export function validatePaymentInput(raw: unknown): {
 
   return {
     value: {
-      fromDate,
-      toDate,
-      totalAmount: totalCents / 100,
-      initialAmount: initialCents / 100,
-      finalAmount: finalCents / 100,
+      paymentDate,
+      paymentType,
+      amount: (cents ?? 0) / 100,
       team,
       profile,
       analyst,
@@ -235,13 +224,13 @@ export function formatPaymentDate(iso: string): string {
 
 export type TopReceiver = {
   name: string;
-  /** Sum of Total Payment Amount, AUD. */
+  /** Sum of Payment Amount, AUD. */
   total: number;
   records: number;
 };
 
 /**
- * Ranks Chat Analyst Names by the sum of Total Payment Amount. Names match
+ * Ranks Chat Analyst Names by the sum of Payment Amount. Names match
  * case-insensitively. Ties go to more records, then A→Z, so the order is stable.
  */
 export function topPaymentReceivers(records: readonly PaymentRecord[], limit = 3): TopReceiver[] {
@@ -250,7 +239,7 @@ export function topPaymentReceivers(records: readonly PaymentRecord[], limit = 3
     const name = text(r.analyst);
     if (!name) continue;
     const key = name.toLowerCase();
-    const cents = Math.round(r.totalAmount * 100);
+    const cents = Math.round(r.amount * 100);
     const hit = byKey.get(key);
     if (hit) {
       hit.cents += cents;
@@ -265,9 +254,9 @@ export function topPaymentReceivers(records: readonly PaymentRecord[], limit = 3
     .map((x) => ({ name: x.name, total: x.cents / 100, records: x.records }));
 }
 
-/** Whether the record's period overlaps [from, to]. Blank bounds are open. */
-export function periodOverlaps(r: Pick<PaymentRecord, "fromDate" | "toDate">, from: string, to: string): boolean {
-  if (from && r.toDate < from) return false;
-  if (to && r.fromDate > to) return false;
+/** Whether the payment date falls in [from, to]. Blank bounds are open. */
+export function paymentDateInRange(r: Pick<PaymentRecord, "paymentDate">, from: string, to: string): boolean {
+  if (from && r.paymentDate < from) return false;
+  if (to && r.paymentDate > to) return false;
   return true;
 }

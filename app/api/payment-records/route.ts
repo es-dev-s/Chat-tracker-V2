@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   }
 }
 
-/** POST body: `{ record: { fromDate, toDate, totalAmount, initialAmount, finalAmount, team, profile, analyst, clientName, clientNumber } }` */
+/** POST body: `{ record: { paymentDate, paymentType, amount, team, profile, analyst, clientName, clientNumber } }` */
 export async function POST(request: Request) {
   try {
     const viewer = await resolveApiViewer(request);
