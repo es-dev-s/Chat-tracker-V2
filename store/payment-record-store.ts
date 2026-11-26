@@ -24,7 +24,7 @@ type PaymentState = {
 
 function sortRecords(list: PaymentRecord[]): PaymentRecord[] {
   return [...list].sort((a, b) =>
-    a.fromDate === b.fromDate ? b.id - a.id : a.fromDate < b.fromDate ? 1 : -1,
+    a.paymentDate === b.paymentDate ? b.id - a.id : a.paymentDate < b.paymentDate ? 1 : -1,
   );
 }
 

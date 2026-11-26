@@ -2,7 +2,7 @@ import type { AppUser } from "@/lib/db/users";
 import { checkSupabaseResult, withSupabaseFailover } from "@/lib/db/supabase";
 import { getUserTeamsList, isUnrestrictedTeamLead } from "@/lib/auth/scoping";
 import { paymentVisibleToViewer } from "@/lib/payment-records/access";
-import type { PaymentRecord, PaymentRecordInput } from "@/lib/payment-records/types";
+import { isPaymentType, type PaymentRecord, type PaymentRecordInput } from "@/lib/payment-records/types";
 
 const TABLE = "payment_records";
 const PAGE = 1000;
@@ -18,11 +18,9 @@ export function dbPaymentRowToApp(row: Record<string, unknown> | null): PaymentR
     updatedAt: String(row.updated_at ?? ""),
     createdByUserId: String(row.created_by_user_id ?? ""),
     createdByRole: String(row.created_by_role ?? ""),
-    fromDate: String(row.from_date ?? "").slice(0, 10),
-    toDate: String(row.to_date ?? "").slice(0, 10),
-    totalAmount: Number(row.total_amount ?? 0),
-    initialAmount: Number(row.initial_amount ?? 0),
-    finalAmount: Number(row.final_amount ?? 0),
+    paymentDate: String(row.from_date ?? "").slice(0, 10),
+    paymentType: legacyPaymentType(row),
+    amount: Number(row.total_amount ?? 0),
     team: String(row.team ?? ""),
     profile: String(row.profile ?? ""),
     analyst: String(row.analyst ?? ""),
@@ -31,13 +29,25 @@ export function dbPaymentRowToApp(row: Record<string, unknown> | null): PaymentR
   };
 }
 
+/** Rows saved before payment_type existed: a final-only amount counts as final, else initial. */
+function legacyPaymentType(row: Record<string, unknown>): PaymentRecord["paymentType"] {
+  if (isPaymentType(row.payment_type)) return row.payment_type;
+  return Number(row.final_amount ?? 0) > 0 && Number(row.initial_amount ?? 0) === 0 ? "final" : "initial";
+}
+
+/**
+ * One payment per row. The single Payment Date fills both from_date and to_date and
+ * the amount fills total_amount plus the initial/final column for its type, so the
+ * existing table constraints still hold.
+ */
 function inputToDb(input: PaymentRecordInput): Record<string, unknown> {
   return {
-    from_date: input.fromDate,
-    to_date: input.toDate,
-    total_amount: input.totalAmount,
-    initial_amount: input.initialAmount,
-    final_amount: input.finalAmount,
+    from_date: input.paymentDate,
+    to_date: input.paymentDate,
+    payment_type: input.paymentType,
+    total_amount: input.amount,
+    initial_amount: input.paymentType === "initial" ? input.amount : 0,
+    final_amount: input.paymentType === "final" ? input.amount : 0,
     // Column is NOT NULL with a 1..1000 check; the form no longer asks for a count.
     payment_count: 1,
     team: input.team,

@@ -11,6 +11,8 @@ import { applyPaymentViewerRules } from "@/lib/payment-records/access";
 import {
   PAYMENT_FIELDS,
   PAYMENT_LIMITS,
+  PAYMENT_TYPES,
+  PAYMENT_TYPE_LABEL,
   formatAud,
   formatPaymentDate,
   validatePaymentInput,
@@ -27,13 +29,11 @@ export const ANALYST_CONFIRM_MESSAGE =
   "Please check if any changes are left. Once added, this record cannot be edited or deleted.";
 
 const FIELD_ID: Record<PaymentRecordField, string> = {
-  fromDate: "pay-from",
-  toDate: "pay-to",
+  paymentDate: "pay-date",
+  paymentType: "pay-type",
+  amount: "pay-amount",
   clientName: "pay-client-name",
   clientNumber: "pay-client-number",
-  totalAmount: "pay-total",
-  initialAmount: "pay-initial",
-  finalAmount: "pay-final",
   team: "pay-team",
   profile: "pay-profile",
   analyst: "pay-analyst",
@@ -152,7 +152,7 @@ export default function PaymentRecordFormDialog({
   const touch = (key: PaymentRecordField) => setTouched((t) => (t.has(key) ? t : new Set(t).add(key)));
 
   useEffect(() => {
-    document.getElementById(FIELD_ID.fromDate)?.focus();
+    document.getElementById(FIELD_ID.paymentDate)?.focus();
   }, []);
 
   // Escape closes an untouched form; once something is typed it must be closed on purpose.
@@ -201,27 +201,7 @@ export default function PaymentRecordFormDialog({
     });
   const describe = (f: PaymentRecordField) => `${FIELD_ID[f]}-msg`;
 
-  const money = (f: "totalAmount" | "initialAmount" | "finalAmount", label: string) => (
-    <Field id={FIELD_ID[f]} label={`${label} (AUD)`} required error={shown(f)}>
-      <div className="ct-pay-money">
-        <span className="ct-pay-money__unit" aria-hidden>
-          AUD
-        </span>
-        <input
-          id={FIELD_ID[f]}
-          style={ctl(f, { paddingLeft: 52 })}
-          inputMode="decimal"
-          autoComplete="off"
-          placeholder="0.00"
-          value={form[f]}
-          onChange={(e) => setField(f, e.target.value.replace(/[^\d.,]/g, ""))}
-          onBlur={() => touch(f)}
-          aria-invalid={!!shown(f)}
-          aria-describedby={describe(f)}
-        />
-      </div>
-    </Field>
-  );
+  const typeLabel = form.paymentType ? PAYMENT_TYPE_LABEL[form.paymentType] : "";
 
   /** Analyst: pick from their own list. Team Lead: free text with suggestions. */
   const pick = (f: "team" | "profile", label: string, options: string[]) => {
@@ -318,31 +298,52 @@ export default function PaymentRecordFormDialog({
             submit();
           }}
         >
-          <div className="ct-pay-grid ct-pay-grid--2">
-            <Field id={FIELD_ID.fromDate} label="From Date" required error={shown("fromDate")}>
-              <CtDateInput
-                id={FIELD_ID.fromDate}
-                aria-label="From Date"
-                value={form.fromDate}
-                onChange={(v) => setField("fromDate", v)}
-                inputStyleFn={(extra) => ctl("fromDate", extra ?? {})}
-              />
-            </Field>
-            <Field id={FIELD_ID.toDate} label="To Date" required error={shown("toDate")}>
-              <CtDateInput
-                id={FIELD_ID.toDate}
-                aria-label="To Date"
-                value={form.toDate}
-                onChange={(v) => setField("toDate", v)}
-                inputStyleFn={(extra) => ctl("toDate", extra ?? {})}
-              />
-            </Field>
-          </div>
-
           <div className="ct-pay-grid ct-pay-grid--3">
-            {money("totalAmount", "Total Payment Amount")}
-            {money("initialAmount", "Initial Payment")}
-            {money("finalAmount", "Final Payment")}
+            <Field id={FIELD_ID.paymentDate} label="Payment Date" required error={shown("paymentDate")}>
+              <CtDateInput
+                id={FIELD_ID.paymentDate}
+                aria-label="Payment Date"
+                value={form.paymentDate}
+                onChange={(v) => setField("paymentDate", v)}
+                inputStyleFn={(extra) => ctl("paymentDate", extra ?? {})}
+              />
+            </Field>
+            <Field id={FIELD_ID.paymentType} label="Payment Type" required error={shown("paymentType")}>
+              <CtSelect
+                id={FIELD_ID.paymentType}
+                aria-label="Payment Type"
+                openListHighlight="none"
+                value={form.paymentType}
+                onChange={(v) => setField("paymentType", v)}
+                options={[
+                  { value: "", label: "Select payment type" },
+                  ...PAYMENT_TYPES.map((t) => ({ value: t, label: PAYMENT_TYPE_LABEL[t] })),
+                ]}
+                placeholder="Select payment type"
+                triggerStyle={ctl("paymentType", { cursor: "pointer" })}
+              />
+            </Field>
+            {form.paymentType ? (
+              <Field id={FIELD_ID.amount} label="Payment Amount (AUD)" required error={shown("amount")}>
+                <div className="ct-pay-money">
+                  <span className="ct-pay-money__unit" aria-hidden>
+                    AUD
+                  </span>
+                  <input
+                    id={FIELD_ID.amount}
+                    style={ctl("amount", { paddingLeft: 52 })}
+                    inputMode="decimal"
+                    autoComplete="off"
+                    placeholder="0.00"
+                    value={form.amount}
+                    onChange={(e) => setField("amount", e.target.value.replace(/[^\d.,]/g, ""))}
+                    onBlur={() => touch("amount")}
+                    aria-invalid={!!shown("amount")}
+                    aria-describedby={describe("amount")}
+                  />
+                </div>
+              </Field>
+            ) : null}
           </div>
 
           <div className="ct-pay-grid ct-pay-grid--2">
@@ -456,10 +457,8 @@ export default function PaymentRecordFormDialog({
         <p className="ct-pay-confirm__lead">{ANALYST_CONFIRM_MESSAGE}</p>
         <dl className="ct-pay-confirm__list">
           <div>
-            <dt>Period</dt>
-            <dd>
-              {formatPaymentDate(value.fromDate)} – {formatPaymentDate(value.toDate)}
-            </dd>
+            <dt>Payment Date</dt>
+            <dd>{formatPaymentDate(value.paymentDate)}</dd>
           </div>
           <div>
             <dt>Client</dt>
@@ -469,14 +468,8 @@ export default function PaymentRecordFormDialog({
             </dd>
           </div>
           <div>
-            <dt>Initial / Final</dt>
-            <dd>
-              {formatAud(value.initialAmount)} / {formatAud(value.finalAmount)}
-            </dd>
-          </div>
-          <div>
-            <dt>Total</dt>
-            <dd>{formatAud(value.totalAmount)}</dd>
+            <dt>{typeLabel || "Payment"}</dt>
+            <dd>{formatAud(value.amount)}</dd>
           </div>
           <div>
             <dt>Team / Profile</dt>

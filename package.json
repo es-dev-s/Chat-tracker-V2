@@ -9,7 +9,7 @@
     "start:prod": "node scripts/with-cloud-env.mjs next start -p 5677 -H 0.0.0.0",
     "prod:local": "next build && npm run start:prod",
     "lint": "eslint",
-    "verify": "node scripts/verify-role-pages.mjs && node scripts/verify-log-chat-save.mjs && node scripts/verify-db-failover.mjs",
+    "verify": "node scripts/verify-role-pages.mjs && node scripts/verify-log-chat-save.mjs && node scripts/verify-db-failover.mjs && node scripts/verify-ct-tickets.mjs",
     "sync:standby": "node scripts/sync-cloud-to-standby.mjs",
     "teams:merge-case": "node scripts/merge-team-case-duplicates.mjs",
     "dev:lan": "node scripts/dev-lan.mjs"
