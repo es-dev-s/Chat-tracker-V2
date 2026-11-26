@@ -284,7 +284,6 @@ export default function LogWhatsAppAuditView() {
 
   if (!user) return null;
 
-  const day = auditWeekday(form.date);
   const dated = withDates(form);
   const today = todayIso();
   const gap = replyGapLabelDated(dated.clientMsgDate ?? "", form.clientMsgReceived, dated.replyDate ?? "", form.replyTime);
@@ -355,7 +354,7 @@ export default function LogWhatsAppAuditView() {
             <legend className="ct-wal-section__title">
               <CalendarDays size={15} aria-hidden /> Chat details
             </legend>
-            <div className="ct-wal-grid ct-wal-grid--4">
+            <div className="ct-wal-grid ct-wal-grid--3">
               <div className={fieldClass("date")}>
                 <label className="ct-wal-label ct-wal-label--req" htmlFor={FIELD_ID.date}>
                   Date
@@ -368,13 +367,6 @@ export default function LogWhatsAppAuditView() {
                   inputStyleFn={(extra) => ctl("date", extra ?? {})}
                 />
                 <FieldError id={FIELD_ID.date} text={shown("date")} />
-              </div>
-              <div className="ct-wal-field">
-                <span className="ct-wal-label">Day</span>
-                <div className="ct-wal-readonly" aria-live="polite">
-                  {day || <span className="ct-wa-muted">Pick a date</span>}
-                </div>
-                <div className="ct-wal-field__msg ct-wal-field__msg--hint">Filled from the date</div>
               </div>
               <div className={fieldClass("shift")}>
                 <label className="ct-wal-label" htmlFor={FIELD_ID.shift}>
