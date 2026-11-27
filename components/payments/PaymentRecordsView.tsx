@@ -27,6 +27,7 @@ import {
   PAYMENT_TYPE_LABEL,
   paymentDateInRange,
   topPaymentReceivers,
+  totalPaymentAmount,
   type PaymentRecord,
   type PaymentRecordInput,
 } from "@/lib/payment-records/types";
@@ -121,13 +122,10 @@ export default function PaymentRecordsView() {
     });
   }, [dateRows, team, query]);
 
-  const stats = useMemo(() => {
-    let cents = 0;
-    for (const r of rows) {
-      cents += Math.round(r.amount * 100);
-    }
-    return { records: rows.length, total: cents / 100 };
-  }, [rows]);
+  const stats = useMemo(
+    () => ({ records: rows.length, total: totalPaymentAmount(rows) }),
+    [rows],
+  );
 
   // Ranking follows the date filter so "top receivers this month" works; team / search don't narrow it.
   const topReceivers = useMemo(() => (showTop ? topPaymentReceivers(dateRows, 3) : []), [showTop, dateRows]);

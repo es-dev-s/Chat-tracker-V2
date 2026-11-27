@@ -260,3 +260,9 @@ export function paymentDateInRange(r: Pick<PaymentRecord, "paymentDate">, from: 
   if (to && r.paymentDate > to) return false;
   return true;
 }
+
+/** Sum of Payment Amount (AUD), added in cents so the total is exact. */
+export function totalPaymentAmount(records: readonly PaymentRecord[]): number {
+  const cents = records.reduce((sum, r) => sum + Math.round(r.amount * 100), 0);
+  return cents / 100;
+}

@@ -6,6 +6,7 @@ import {
   BadgeCheck,
   CircleDot,
   Clock3,
+  DollarSign,
   Inbox,
   MessageCircle,
   MessageSquareWarning,
@@ -23,6 +24,8 @@ import { useAuthStore } from "@/store/auth-store";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import { useFilteredRecords } from "@/hooks/useFilteredRecords";
 import { useWorkspaceHydration } from "@/hooks/useWorkspaceHydration";
+import { usePaymentRecords } from "@/hooks/usePaymentRecords";
+import { formatAud, totalPaymentAmount } from "@/lib/payment-records/types";
 import { DashboardSkeleton } from "@/components/ui/WorkspaceSkeletons";
 import DashboardKpiBoard, {
   type DashboardKpiItem,
@@ -52,6 +55,12 @@ export default function DashboardView() {
   const filtered = useFilteredRecords(recordsForMetrics);
 
   const stats = useMemo(() => computeDashboardStats(filtered), [filtered]);
+
+  // Role-scoped payment records; the store refreshes on realtime events, so
+  // the total updates as soon as a payment record is added.
+  const { records: paymentRecords, status: paymentStatus } = usePaymentRecords(user?.id);
+  const paymentTotal = useMemo(() => totalPaymentAmount(paymentRecords), [paymentRecords]);
+  const paymentsReady = paymentStatus === "ready";
 
   const dashboardEmptyCopy = useMemo(() => {
     if (role === "mainTeamLead") {
@@ -154,8 +163,16 @@ export default function DashboardView() {
         tone: "amber",
         icon: MessageCircle,
       },
+      {
+        label: "Total Payment Collected",
+        value: paymentsReady ? formatAud(paymentTotal) : "—",
+        sub: `${paymentRecords.length.toLocaleString()} payment records`,
+        tone: "green",
+        valueType: "text",
+        icon: DollarSign,
+      },
     ],
-    [stats, filtered.length],
+    [stats, filtered.length, paymentsReady, paymentTotal, paymentRecords.length],
   );
 
   if (!user) return null;
