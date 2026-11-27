@@ -14,7 +14,8 @@
     "teams:merge-case": "node scripts/merge-team-case-duplicates.mjs",
     "dev:lan": "node scripts/dev-lan.mjs",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui-port=0",
+    "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.1",
