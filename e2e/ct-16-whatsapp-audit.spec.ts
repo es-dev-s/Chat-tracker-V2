@@ -8,7 +8,7 @@ test.use({ storageState: USERS.analyst.file });
 test.describe("CT-16 Log WhatsApp Audit form", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/log-whatsapp-audit");
-    await expect(page.getByRole("heading", { name: "Log WhatsApp Audit" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Log WhatsApp Audit" })).toBeVisible();
   });
 
   test("has no Day field", async ({ page }) => {
